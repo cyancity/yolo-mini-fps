@@ -25,6 +25,9 @@ const REGEN_DELAY = 4, REGEN_RATE = 25;
 // 速度从 DASH_PEAK 按 1 - u² 落到 DASH_EXIT，一次约 6.4 米；结束后 DASH_HANG 秒内下落只吃 HANG_GRAVITY 倍重力
 const DASH_PEAK = 27, DASH_TIME = 0.32, DASH_EXIT = 7.5, DASH_COOLDOWN = 1.6;
 const DASH_HANG = 0.25, HANG_GRAVITY = 0.3, DASH_FOV = 13;
+// 喷气的画面效果（视野拉开、模糊、速度线，都乘 player.dash）跟着速度走：前三分之二全开，之后随减速一起收，
+// 结束后按 DASH_FADE 收完，视野按 DASH_FOV_BACK 跟回去。喷完马上大角度转向时画面已经基本回到正常视野
+const DASH_EASE = 1.8, DASH_FADE = 16, DASH_FOV_BACK = 30;
 export const DASH = { time: DASH_TIME, cooldown: DASH_COOLDOWN };
 // 落地：镜头先往下压再弹回（二阶，最低点在落地后 1/LAND_W 秒，约 67 毫秒）。下沉深度随落地速度涨，
 // 平地起跳落下约 2 厘米，6 米落差封顶 6.5 厘米；落差超过两米左右才带一点低头，最多 LAND_PITCH
@@ -245,7 +248,8 @@ export class Player {
       }
     }
     this.slide = damp(this.slide, this.sliding ? 1 : 0, this.sliding ? 14 : 8, dt);
-    this.dash = damp(this.dash, this.dashing ? 1 : 0, this.dashing ? 30 : 7, dt);
+    const du = Math.min(1, this.dashT / DASH_TIME);
+    this.dash = damp(this.dash, this.dashing ? Math.min(1, DASH_EASE * (1 - du * du)) : 0, this.dashing ? 30 : DASH_FADE, dt);
     const headroom = this.phys.ceilingHeight(this.position.x, this.position.z, RADIUS * 0.8, this.position.y + CROUCH_HEIGHT) - this.position.y;
     const crouchTarget = wantCrouch || this.sliding || headroom < HEIGHT ? 1 : 0;
     // 滑铲起止那一帧的蹲起已经有滑铲自己的声音，不再叠一下
@@ -263,6 +267,11 @@ export class Player {
     this.lean = damp(this.lean, leanWant, 11, dt);
 
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+    // 喷气方向相对视线的分量跟着当前视角走：喷的途中、喷完转了身，模糊和速度线的方向跟着转
+    if (this.dash > 1e-3) {
+      this.dashF = -sy * this.dashX - cy * this.dashZ;
+      this.dashS = cy * this.dashX - sy * this.dashZ;
+    }
     let wx = -sy * f + cy * s, wz = -cy * f - sy * s;
     const wl = Math.hypot(wx, wz);
     if (wl > 1e-5) { wx /= wl; wz /= wl; }
@@ -464,7 +473,8 @@ export class Player {
     cam.rotation.set(pitch, this.yaw + this.kick.yaw, roll, 'YXZ');
     const fov = this.baseFov * (1 - 0.26 * this.ads) + ((this.sprinting ? 3 : 0) + (6 * this.slide + DASH_FOV * this.dash) * (1 - this.ads)) * this.motion;
     if (Math.abs(cam.fov - fov) > 0.01) {
-      cam.fov = damp(cam.fov, fov, this.dashing ? 24 : 14, dt || 0.016);
+      const back = this.dash > 0.01 && fov < cam.fov; // 喷气的视野正在往回收
+      cam.fov = damp(cam.fov, fov, back ? DASH_FOV_BACK : this.dashing ? 24 : 14, dt || 0.016);
       cam.updateProjectionMatrix();
     }
     cam.updateMatrixWorld();
