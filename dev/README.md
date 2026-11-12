@@ -194,6 +194,15 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 量法 `dev/rain_measure.js`：`__rm.setup('night')` 进练习场并切时段，`__rm.shot(x, z, yaw, pitch, y)` 返回整帧均值、画面下部 40% 的均值和最亮的几列，`__rm.col(px)` 是某一列从中线往下的亮度，`__rm.sky()` 是天空平均色；`__ab(true)` 在同一页面退回不下雨的样子，`__ab(false)` 换回来。
 - 没看过的：前台连续运行加镜头移动时，倒影竖条在 TAA 下会不会闪；中画质没有单独截图。
 
+## 轮次和排行榜（2026-11-13）
+
+- 轮次在 `src/game/rounds.js`：`game.rounds.n` 是当前第几轮，`game.rounds.done` 是这一局打完的各轮成绩，`game.rounds.live(time, run, kills)` 是当前这一轮到现在的成绩（`{ round, time, penalty, shots, hits, headshots, kills, damage }`，`time` 已含罚时）。`game.js` 的 `objectives()` 在清完街道（`routeI` 走满一圈）时调 `roundDone()`：成绩定格、横幅「第 N 轮完成」、上报，下一轮从这一刻起算。打空罚时的起始轮次和秒数是 `MISS_FROM`、`MISS_PENALTY`。
+- 排行榜客户端在 `src/game/board.js`（`game.board`）：开局 `begin()` 领凭据，`report(r, tod)` 把一轮成绩放进 `pending`（存在 localStorage 的 `dockzero.board.pending.v1`），有名字就 `flush()` 报上去，`top(round, sort)` 拉榜单。`state` 是 `idle`、`sending`、`offline`、`rejected`，`last` 是最近报上去的一轮和名次。名字是设置项 `name`（`settings.js` 的 `cleanName` 和服务端同一套规整规则）。
+- 服务地址：页面开在 localhost 上时报给 `http://localhost:8823`（本机起 `node server/board.js`），其他域名报给正式地址，打包时可以用 `VITE_BOARD_URL` 改。本机没起服务时菜单里显示「排行榜连不上」，不影响玩。
+- 不上榜的局：开过 `__dbg.god()` 或用 `__dbg.play()` 注入输入的（`game.cheated`）。页面开在 localhost 上时照样报，方便脚本验收。
+- 界面在 `src/ui/hud_board.js`：`BoardView` 是菜单里的榜单（阵亡页直接带，开始和暂停页点「排行榜」把正文换成它，`.hud` 上挂 `data-board`），`RoundClock` 是右上角的轮次计时（`hud.setRound(r)`）。榜单显示前 10 名，自己不在里面时补在最后一行。
+- 脚本走一轮：`__dbg.play('waves')` 后每个目标等敌人刷出来，`game.soldiers.kill(s, null, 'torso')`、`game.drones.kill(d)` 清掉，`__dbg.frame(45, 1/30)` 推进；清完第 5 个目标看 `game.rounds.done` 和 `game.board.pending`、`game.board.last`。
+
 ## 区域目标和驻守（2026-11-12）
 
 - 流程在 `game.js` 的 `objectives()`：一局沿 `plan.js` 的 `ROUTE`（堆场、仓库、办公楼、楼顶、街道，卸货场并在街道里）一圈圈推进。开局 1.5 秒出第一个目标，清完（`drones.aliveCount + soldiers.aliveCount === 0`）补弹药，4 秒后出下一个。
