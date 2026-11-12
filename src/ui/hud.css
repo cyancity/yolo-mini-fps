@@ -1,0 +1,1342 @@
+/* ---------- 图层 ---------- */
+
+.hud,
+.hud *,
+.hud *::before,
+.hud *::after {
+  box-sizing: border-box;
+}
+
+.hud {
+  /* 覆盖层：盖在游戏画布上，自身不接收指针 */
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hud);
+  display: grid;
+  /* minmax(0, …)：两侧内容再宽也不挤占罗盘所在的中列 */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: var(--hud-inset);
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  color-scheme: dark;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+  text-shadow: var(--hud-text-shadow);
+  -webkit-font-smoothing: antialiased;
+}
+
+.hud > :not(.hud-menu) {
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+/* 菜单打开时收起对局信息 */
+.hud[data-menu] > :not(.hud-menu) {
+  opacity: 0;
+}
+
+.hud-fps {
+  grid-area: 1 / 1;
+  place-self: start;
+  display: none;
+  font-size: var(--text-caption);
+  color: var(--muted-foreground);
+}
+
+.hud-fps[data-on] {
+  display: block;
+}
+
+/* ---------- 上方：罗盘、波次 ---------- */
+
+.hud-top {
+  grid-area: 1 / 2;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.hud-compass {
+  width: var(--w-compass);
+  display: grid;
+  /* 列宽要确定，轨道的百分比宽度才按可视宽度算 */
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--hud-scrim);
+  -webkit-mask-image: var(--mask-fade-x);
+  mask-image: var(--mask-fade-x);
+}
+
+.hud-compass > * {
+  grid-area: 1 / 1;
+}
+
+/* 轨道铺 540 度，可视 120 度，所以是可视宽度的 450%；108 列，每列 5 度，和 hud.js 的常量对应 */
+.hud-compass-track {
+  width: 450%;
+  display: grid;
+  grid-template-columns: repeat(108, minmax(0, 1fr));
+  padding-top: var(--space-2);
+  padding-bottom: calc(var(--h-compass-ticks) + var(--space-1));
+  /* 刻度：每 15 度一根长的，每 5 度一根短的，右侧各带 1px 暗边，亮背景上也看得见。
+     用整条的 repeating 渐变而不是平铺小图，避免平铺尺寸取整后越排越偏 */
+  background:
+    repeating-linear-gradient(90deg, var(--foreground) 0 1px, var(--hud-gap) 1px 2px, transparent 2px calc(100% / 36))
+      left bottom / 100% var(--h-compass-ticks) no-repeat,
+    repeating-linear-gradient(90deg, var(--border-strong) 0 1px, var(--hud-track) 1px 2px, transparent 2px calc(100% / 108))
+      left bottom / 100% calc(var(--h-compass-ticks) / 2) no-repeat;
+  will-change: transform;
+}
+
+.hud-compass-track span {
+  grid-row: 1;
+  justify-self: start;
+  /* 标签中心对准所在列的左边线，也就是它的刻度 */
+  transform: translateX(-50%);
+  font-size: var(--text-caption);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.hud-compass-track span[data-cardinal] {
+  font-size: var(--text-label);
+  font-weight: var(--font-weight-semibold);
+  color: var(--foreground);
+}
+
+/* 剩余敌人的方位：刻度下沿朝上的橙色小三角，left 由 hud_status.js 的 CompassMarks 写进 --x */
+.hud-compass-marks {
+  position: relative;
+}
+
+.hud-compass-marks i {
+  position: absolute;
+  bottom: 0;
+  left: var(--x, 50%);
+  display: none;
+  border: var(--size-mark) solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--hostile);
+  transform: translateX(-50%);
+  filter: var(--hud-drop);
+}
+
+.hud-compass-marks i[data-on] {
+  display: block;
+}
+
+/* 在视野外：钉在罗盘边上，淡一点 */
+.hud-compass-marks i[data-edge] {
+  opacity: var(--opacity-mark-edge);
+}
+
+/* 朝下的小三角，用边框画，这样投影不会被裁掉 */
+.hud-compass-caret {
+  place-self: start center;
+  border: 5px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--brand);
+  filter: var(--hud-drop);
+}
+
+.hud-wave {
+  display: none;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud-wave[data-on] {
+  display: flex;
+}
+
+.hud-wave b {
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-semibold);
+  color: var(--foreground);
+}
+
+.hud-wave-left {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-strong);
+}
+
+/* 清场后的倒计时：「下一波 N」用品牌色 */
+.hud-wave[data-next] .hud-wave-left b {
+  color: var(--brand-text);
+}
+
+/* 波次、得分和练习场统计和罗盘一样垫一层暗底：朝天看时灰色的小字压在亮云上也读得清 */
+.hud-wave,
+.hud-score,
+.hud-range {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  background: var(--hud-scrim);
+}
+
+/* ---------- 横幅 ---------- */
+
+.hud > .hud-notice {
+  grid-area: 2 / 1 / 3 / -1;
+  place-self: start center;
+  max-width: min(100%, var(--w-menu));
+  margin-top: var(--space-8);
+  padding: var(--space-2) var(--space-10);
+  border-block: 1px solid;
+  border-image: linear-gradient(90deg, transparent, var(--border-strong) 25%, var(--border-strong) 75%, transparent) 1;
+  background: linear-gradient(90deg, transparent, var(--card) 25%, var(--card) 75%, transparent);
+  font-size: var(--text-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wider);
+  /* 字距会在行尾多出一截，用等量缩进把文字拉回正中 */
+  text-indent: var(--tracking-wider);
+  line-height: var(--leading-normal);
+  text-align: center;
+  text-wrap: balance;
+  opacity: 0;
+  transform: translateY(calc(var(--space-2) * -1));
+  transition: opacity var(--duration-slow) var(--ease-out), transform var(--duration-slow) var(--ease-out);
+}
+
+.hud > .hud-notice[data-on] {
+  opacity: 1;
+  transform: none;
+}
+
+.hud[data-menu] > .hud-notice {
+  opacity: 0;
+}
+
+/* 「第 N 波」「区域已肃清」：大一档，上下两道品牌色细线，入场时从宽字距收拢 */
+.hud > .hud-notice[data-variant="wave"] {
+  border-image: linear-gradient(90deg, transparent, var(--brand) 25%, var(--brand) 75%, transparent) 1;
+  font-size: var(--text-headline);
+  font-weight: var(--font-weight-bold);
+}
+
+.hud > .hud-notice[data-variant="wave"][data-on][data-anim="a"] { animation: hud-banner-a var(--duration-banner) var(--ease-out); }
+.hud > .hud-notice[data-variant="wave"][data-on][data-anim="b"] { animation: hud-banner-b var(--duration-banner) var(--ease-out); }
+
+@keyframes hud-banner-a {
+  from { transform: scale(1.18); letter-spacing: calc(var(--tracking-wider) * 2); }
+  to { transform: none; letter-spacing: var(--tracking-wider); }
+}
+
+@keyframes hud-banner-b {
+  from { transform: scale(1.18); letter-spacing: calc(var(--tracking-wider) * 2); }
+  to { transform: none; letter-spacing: var(--tracking-wider); }
+}
+
+/* ---------- 右上：得分 ---------- */
+
+.hud-tr {
+  grid-area: 1 / 3 / 3 / 4;
+  place-self: start end;
+  display: grid;
+  /* 列宽钉在容器宽度上：内容再长也只在列内省略，不把这一块撑出屏幕 */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+  gap: var(--space-3);
+  max-width: 100%;
+}
+
+.hud-score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-size: var(--text-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.hud-score small {
+  font-size: var(--text-label);
+  font-weight: var(--font-weight-regular);
+  color: var(--muted-foreground);
+}
+
+/* ---------- 中央：准星、命中标记、换弹环、受击方向 ---------- */
+
+.hud-center {
+  /* 跨满整个网格再居中：准星对准屏幕正中，不受上下两行高度影响 */
+  grid-area: 1 / 1 / -1 / -1;
+  place-self: center;
+  display: grid;
+  place-items: center;
+}
+
+.hud-center > *,
+.hud-cross > *,
+.hud-hit > *,
+.hud-dmg > * {
+  grid-area: 1 / 1;
+}
+
+.hud-cross,
+.hud-hit,
+.hud-dmg {
+  display: grid;
+  place-items: center;
+}
+
+.hud-cross {
+  --spread: 0px;
+  --off: calc(var(--cross-gap) + var(--spread) + var(--cross-len) / 2);
+  transition: opacity var(--duration-fast) linear;
+}
+
+.hud-cross[data-off] {
+  opacity: 0;
+}
+
+.hud-cross i,
+.hud-cross b,
+.hud-hit i {
+  background: var(--foreground);
+  box-shadow: var(--hud-outline);
+}
+
+/* 四条线只做整像素平移，不旋转，这样始终落在像素格上。--d 是方向：1 向右或向下，-1 向左或向上 */
+.hud-cross i {
+  width: var(--cross-len);
+  height: var(--cross-w);
+  transform: translateX(calc(var(--off) * var(--d)));
+}
+
+.hud-cross i:nth-child(n + 3) {
+  width: var(--cross-w);
+  height: var(--cross-len);
+  transform: translateY(calc(var(--off) * var(--d)));
+}
+
+.hud-cross i:nth-child(odd) { --d: 1; }
+.hud-cross i:nth-child(even) { --d: -1; }
+
+.hud-cross b {
+  width: var(--cross-w);
+  height: var(--cross-w);
+}
+
+.hud-hit {
+  opacity: 0;
+}
+
+.hud-hit i {
+  width: var(--hit-len);
+  height: var(--hit-w);
+  background: var(--hit);
+  transform: rotate(var(--r)) translateX(calc(var(--hit-gap) + var(--hit-len) / 2));
+}
+
+.hud-hit i:nth-child(1) { --r: 45deg; }
+.hud-hit i:nth-child(2) { --r: 135deg; }
+.hud-hit i:nth-child(3) { --r: 225deg; }
+.hud-hit i:nth-child(4) { --r: 315deg; }
+
+/* 命中是白色，击倒（含爆头）一律变黄，除了这个 X 准星上不再有别的标记 */
+.hud-hit[data-kill] i {
+  background: var(--kill);
+}
+
+/* a、b 是两份相同的关键帧，轮换着用：改属性就能重播，不必强制回流。
+   外层只管显隐；四道线各自沿自己的方向从外面收到 --hit-gap，粗细和长度不变 */
+.hud-hit[data-anim="a"] { animation: hud-hit-a var(--duration-hit) linear forwards; }
+.hud-hit[data-anim="b"] { animation: hud-hit-b var(--duration-hit) linear forwards; }
+.hud-hit[data-kill][data-anim] { animation-duration: var(--duration-kill); }
+.hud-hit[data-anim="a"] i { animation: hud-hit-in-a var(--duration-fast) var(--ease-out) backwards; }
+.hud-hit[data-anim="b"] i { animation: hud-hit-in-b var(--duration-fast) var(--ease-out) backwards; }
+
+@keyframes hud-hit-a {
+  0%, 55% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes hud-hit-b {
+  0%, 55% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes hud-hit-in-a {
+  from { transform: rotate(var(--r)) translateX(calc(var(--hit-gap) + var(--hit-in) + var(--hit-len) / 2)); }
+}
+
+@keyframes hud-hit-in-b {
+  from { transform: rotate(var(--r)) translateX(calc(var(--hit-gap) + var(--hit-in) + var(--hit-len) / 2)); }
+}
+
+.hud-reload {
+  width: var(--size-reload);
+  height: var(--size-reload);
+  /* 进度从 12 点方向起 */
+  transform: rotate(-90deg);
+  filter: var(--hud-drop);
+  opacity: 0;
+  transition: opacity var(--duration-fast) linear;
+}
+
+.hud-reload[data-on] {
+  opacity: 1;
+}
+
+/* 线宽是 viewBox（100）里的单位，约合 2px */
+.hud-reload circle {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 3;
+}
+
+.hud-reload circle + circle {
+  stroke: var(--brand);
+  stroke-dasharray: 100;
+  stroke-dashoffset: var(--dash, 100);
+}
+
+.hud-dmg i {
+  width: var(--size-dmg);
+  height: var(--size-dmg);
+  border-radius: 50%;
+  /* 一圈向内晕开的红环，再用锥形遮罩只留正上方一段弧；--a 把它转到来袭方向 */
+  background: radial-gradient(closest-side, transparent 84%, var(--danger) 97%, transparent 100%);
+  -webkit-mask-image: var(--mask-arc);
+  mask-image: var(--mask-arc);
+  opacity: 0;
+  transform: rotate(var(--a, 0rad));
+}
+
+.hud-dmg i[data-anim="a"] { animation: hud-dmg-a var(--duration-dmg) var(--ease-in) forwards; }
+.hud-dmg i[data-anim="b"] { animation: hud-dmg-b var(--duration-dmg) var(--ease-in) forwards; }
+
+@keyframes hud-dmg-a {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes hud-dmg-b {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ---------- 左下：生命 ---------- */
+
+.hud-health {
+  grid-area: 3 / 1;
+  place-self: end start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hud-plus {
+  width: var(--icon);
+  height: var(--icon);
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 30% no-repeat,
+    linear-gradient(currentColor, currentColor) center / 30% 100% no-repeat;
+  filter: var(--hud-drop);
+}
+
+.hud-hp {
+  min-width: 3ch;
+  font-size: var(--text-headline);
+  font-weight: var(--font-weight-semibold);
+  font-stretch: var(--font-stretch-display);
+}
+
+.hud-bar {
+  width: var(--w-bar);
+  height: 4px;
+  display: grid;
+  background: var(--hud-track);
+  box-shadow: var(--hud-outline);
+}
+
+.hud-bar > *,
+.hud-bar::after {
+  grid-area: 1 / 1;
+}
+
+.hud-bar i {
+  background: currentColor;
+  transform-origin: left;
+  transform: scaleX(var(--v, 1));
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+/* 掉血残影：压在血条下面，先停一下再缩回当前值；回血时（data-heal）和血条一起走 */
+.hud-bar i.hud-bar-trail {
+  background: var(--hp-trail);
+  transition: transform var(--duration-trail) var(--ease-out) var(--delay-trail);
+}
+
+.hud-bar i.hud-bar-trail[data-heal] {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+/* 十等分的分段缝 */
+.hud-bar::after {
+  content: "";
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--hud-gap) calc(10% - 2px) 10%);
+}
+
+/* 低血：整块变红，只有十字和血条闪，数字保持不透明 */
+.hud-health[data-low] {
+  color: var(--danger);
+}
+
+.hud-health[data-low] .hud-plus,
+.hud-health[data-low] .hud-bar {
+  animation: hud-pulse var(--duration-pulse) ease-in-out infinite alternate;
+}
+
+@keyframes hud-pulse {
+  from { opacity: 1; }
+  to { opacity: var(--opacity-pulse); }
+}
+
+/* ---------- 右下：技能、弹药、武器、栏位 ---------- */
+
+/* 技能栏在武器块左边，底边对齐栏位那一行 */
+.hud-br {
+  grid-area: 3 / 3;
+  place-self: end;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+  max-width: 100%;
+}
+
+.hud-weapon {
+  min-width: 0;
+  display: grid;
+  /* 同右上角：列宽钉在容器宽度上 */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.hud-ammo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-stretch: var(--font-stretch-display);
+}
+
+.hud-weapon[data-melee] .hud-ammo {
+  display: none;
+}
+
+.hud-mag {
+  min-width: 2ch;
+  font-size: var(--text-display);
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
+}
+
+.hud-weapon[data-ammo="low"] .hud-mag {
+  color: var(--warning);
+}
+
+.hud-weapon[data-ammo="empty"] .hud-mag {
+  color: var(--danger);
+}
+
+.hud-reserve {
+  font-size: var(--text-headline);
+  color: var(--muted-foreground);
+}
+
+.hud-reserve::before {
+  content: "/";
+  margin-right: var(--space-1);
+}
+
+.hud-wline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  max-width: min(var(--w-weapon), 100%);
+}
+
+.hud-wname {
+  min-width: 0;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--leading-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-mode {
+  flex: none;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-strong);
+  font-size: var(--text-label);
+  color: var(--muted-foreground);
+}
+
+.hud-mode:empty {
+  display: none;
+}
+
+.hud-slots {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.hud-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-0-5) var(--space-2) var(--space-0-5) var(--space-0-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud-slot[data-active] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--foreground);
+}
+
+.hud kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-1-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  font: inherit;
+  font-size: var(--text-label);
+  letter-spacing: 0;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+/* 对局里的键帽压在画面上，换成深色底，亮背景上也有形 */
+.hud-slot kbd {
+  background: var(--hud-track);
+  color: inherit;
+}
+
+.hud-slot[data-active] kbd {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-foreground);
+  font-weight: var(--font-weight-semibold);
+  text-shadow: none;
+}
+
+/* ---------- 菜单 ---------- */
+
+.hud-menu {
+  /* 模态遮罩：盖住整个视口，包括 HUD 的内边距 */
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-menu);
+  display: grid;
+  align-items: center;
+  padding: var(--hud-inset) var(--menu-inset);
+  background: linear-gradient(90deg, var(--overlay-strong), var(--overlay) 55%, var(--overlay-soft));
+  -webkit-backdrop-filter: blur(var(--blur-menu));
+  backdrop-filter: blur(var(--blur-menu));
+  cursor: default;
+  text-shadow: none;
+  opacity: 0;
+  visibility: hidden;
+  /* 关闭时等淡出结束再隐藏，期间不可点也不可聚焦 */
+  transition: opacity var(--duration-base) var(--ease-out), visibility 0s linear var(--duration-base);
+}
+
+.hud[data-menu] .hud-menu {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* 加载时画布还没内容，直接用实底 */
+.hud[data-menu="loading"] .hud-menu {
+  background: var(--background);
+}
+
+.hud-panel {
+  width: min(var(--w-menu), 100%);
+  display: grid;
+  justify-items: start;
+  gap: var(--space-6);
+  transform: translateY(var(--space-2));
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.hud[data-menu] .hud-panel {
+  transform: none;
+}
+
+/* 开始菜单：操作说明和设置并排；暂停菜单：本局战绩和设置并排。放不下时设置换到下一行 */
+.hud[data-menu="start"] .hud-panel,
+.hud[data-menu="paused"] .hud-panel {
+  width: min(var(--w-menu-wide), 100%);
+}
+
+.hud-body {
+  justify-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6) var(--space-10);
+}
+
+/* 面板只是焦点的落脚处（见 hud.js 的 showMenu），自己不画焦点环 */
+.hud-panel:focus {
+  outline: none;
+}
+
+.hud-title {
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--brand);
+}
+
+.hud-title h1 {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-title);
+  line-height: var(--leading-snug);
+}
+
+.hud-title p {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-caption);
+  letter-spacing: var(--tracking-wider);
+  color: var(--muted-foreground);
+}
+
+.hud[data-menu="dead"] .hud-title {
+  border-left-color: var(--danger);
+}
+
+.hud[data-menu="dead"] .hud-title h1 {
+  color: var(--danger);
+}
+
+/* 阵亡页的副标题换成死因 */
+.hud-title p[data-cause] {
+  font-size: var(--text-body);
+  letter-spacing: var(--tracking-wide);
+  color: var(--foreground);
+}
+
+.hud-keys,
+.hud-stats {
+  flex: 1 1 var(--w-keys);
+  display: grid;
+  margin: 0;
+  padding-block: var(--space-5);
+  border-block: 1px solid var(--border);
+}
+
+/* 先填满一列 10 行，再换下一列：左列是身体动作和系统键，右列是武器 */
+.hud-keys {
+  grid-auto-flow: column;
+  grid-template-rows: repeat(10, auto);
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-2) var(--space-10);
+}
+
+.hud-keys div {
+  display: grid;
+  grid-template-columns: var(--w-key) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hud-keys dt {
+  display: flex;
+}
+
+.hud-keys dd {
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+}
+
+.hud-stats {
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+  /* 暂停菜单里和设置区一样高：数字放在中间，不被拉开 */
+  align-content: center;
+  gap: var(--space-8) var(--space-16);
+}
+
+.hud-stats > [hidden] {
+  display: none;
+}
+
+.hud-stats div {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* 数字在上、名称在下；DOM 里仍是 dt 在前 */
+.hud-stats dd {
+  order: -1;
+  margin: 0;
+  font-size: var(--text-headline);
+  font-weight: var(--font-weight-semibold);
+  font-stretch: var(--font-stretch-display);
+}
+
+.hud-stats dt {
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud-seg {
+  display: flex;
+}
+
+.hud-seg button,
+.hud-btn {
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) linear,
+    border-color var(--duration-fast) linear,
+    color var(--duration-fast) linear;
+}
+
+.hud-seg button {
+  min-width: calc(var(--control-h) * 1.75);
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: var(--text-label);
+  color: var(--muted-foreground);
+}
+
+/* 相邻分段共用一条边 */
+.hud-seg button + button {
+  margin-left: -1px;
+}
+
+.hud-seg button:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.hud-seg button[aria-checked="true"] {
+  /* 选中项的边框要压在相邻分段的边上 */
+  position: relative;
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+.hud-actions {
+  justify-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.hud-btn {
+  min-width: var(--w-btn);
+  height: var(--control-h-lg);
+  padding: 0 var(--space-8);
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-title);
+  /* 同横幅：抵掉行尾多出的字距 */
+  text-indent: var(--tracking-title);
+  color: var(--primary-foreground);
+}
+
+.hud-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-foreground);
+}
+
+.hud-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.hud-btn:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.hud-seg button:focus-visible,
+.hud-btn:focus-visible {
+  /* 焦点环要盖过相邻分段 */
+  position: relative;
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.hud-load {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hud-load-bar {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+}
+
+.hud-load-bar i {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transform-origin: left;
+  transform: scaleX(var(--v, 0));
+  transition: transform var(--duration-base) linear;
+}
+
+.hud-load-pct {
+  min-width: 4ch;
+  font-size: var(--text-label);
+  text-align: right;
+  color: var(--muted-foreground);
+}
+
+/* 按菜单状态收起的区块。写在各区块的 display 之后，靠两段选择器的特异性压过它们 */
+.hud-panel > [hidden],
+.hud-body > [hidden],
+.hud-actions > [hidden] {
+  display: none;
+}
+
+/* ---------- 减少动效 ---------- */
+
+/* 设置里的「动态效果」选了减弱（默认跟系统的 prefers-reduced-motion）：hud.js 在 .hud 上挂 data-motion="reduced" */
+.hud[data-motion="reduced"] .hud-health[data-low] .hud-plus,
+.hud[data-motion="reduced"] .hud-health[data-low] .hud-bar,
+.hud[data-motion="reduced"] > .hud-notice[data-variant="wave"][data-on] {
+  animation: none;
+}
+
+/* 停留时长是功能性的，保留计时，只去掉位移和缩放 */
+.hud[data-motion="reduced"] .hud-hit[data-anim="a"] { animation-name: hud-hold-a; }
+.hud[data-motion="reduced"] .hud-hit[data-anim="b"] { animation-name: hud-hold-b; }
+.hud[data-motion="reduced"] .hud-hit[data-anim] i { animation: none; }
+
+.hud[data-motion="reduced"] > .hud-notice,
+.hud[data-motion="reduced"] .hud-panel {
+  transform: none;
+}
+
+@keyframes hud-hold {
+  0%, 99% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes hud-hold-a {
+  0%, 99% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes hud-hold-b {
+  0%, 99% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---------- 准星下方：加分条 ---------- */
+
+/* 钉在屏幕中心往下一段，不进网格：不会被两侧内容推开，也盖不到准星和右下角 */
+.hud > .hud-ticker {
+  position: absolute;
+  top: calc(50% + var(--ticker-offset));
+  left: 50%;
+  width: var(--w-ticker);
+  margin-left: calc(var(--w-ticker) / -2);
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+}
+
+/* 连杀窗口内的累计分；第二次击倒起带上连杀数 */
+.hud-ticker-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  opacity: 0;
+}
+
+.hud-ticker-head b {
+  font-size: var(--text-title);
+  font-weight: var(--font-weight-semibold);
+  font-stretch: var(--font-stretch-display);
+  color: var(--foreground);
+}
+
+/* 实底色块，白天的天空和夜里都看得清 */
+.hud-ticker-head span {
+  padding: 0 var(--space-1-5);
+  border-radius: var(--radius);
+  background: var(--kill);
+  font-size: var(--text-label);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-normal);
+  color: var(--brand-foreground);
+  text-shadow: none;
+  box-shadow: var(--hud-outline);
+}
+
+.hud-ticker-head span:empty {
+  display: none;
+}
+
+.hud-ticker-head[data-anim="a"] { animation: hud-chain-a var(--duration-chain) linear forwards; }
+.hud-ticker-head[data-anim="b"] { animation: hud-chain-b var(--duration-chain) linear forwards; }
+
+@keyframes hud-chain-a {
+  0% { opacity: 0; transform: scale(1.25); }
+  4% { opacity: 1; transform: none; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes hud-chain-b {
+  0% { opacity: 0; transform: scale(1.25); }
+  4% { opacity: 1; transform: none; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 明细：最新的在最上面，衬一条两端渐隐的暗底 */
+.hud-ticker ul {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-ticker li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-5);
+  background: linear-gradient(90deg, transparent, var(--card) 24%, var(--card) 76%, transparent);
+  font-size: var(--text-label);
+  line-height: var(--leading-normal);
+  white-space: nowrap;
+  animation: hud-tick var(--duration-tick) linear forwards;
+}
+
+.hud-ticker li span {
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud-ticker li b {
+  font-weight: var(--font-weight-semibold);
+  color: var(--foreground);
+}
+
+.hud-ticker li em {
+  font-style: normal;
+  font-weight: var(--font-weight-semibold);
+  color: var(--kill-head);
+}
+
+/* 暂停时停住：连杀窗口按游戏时间算，动画也跟着停 */
+.hud[data-menu] .hud-ticker,
+.hud[data-menu] .hud-ticker * {
+  animation-play-state: paused;
+}
+
+@keyframes hud-tick {
+  0% { opacity: 0; transform: translateY(calc(var(--space-2) * -1)); }
+  10% { opacity: 1; transform: none; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 停留时长是功能性的：保留计时，只去掉缩放和位移（hud-hold 系列关键帧在上面的「减少动效」） */
+.hud[data-motion="reduced"] .hud-ticker-head[data-anim="a"] { animation-name: hud-hold-a; }
+.hud[data-motion="reduced"] .hud-ticker-head[data-anim="b"] { animation-name: hud-hold-b; }
+.hud[data-motion="reduced"] .hud-ticker li { animation-name: hud-hold; }
+
+/* ---------- 右下：技能栏 ---------- */
+
+.hud-abilities {
+  display: flex;
+  gap: var(--space-2);
+  /* 键帽的底边和右侧栏位里的键帽对齐 */
+  padding-bottom: calc(var(--space-0-5) + 1px);
+}
+
+.hud-ability {
+  --cd: 1;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  color: var(--muted-foreground);
+}
+
+/* 冷却时从下往上涨一层品牌色，顶上一道细线标出进度 */
+.hud-ability-tile {
+  display: grid;
+  place-items: center;
+  width: var(--size-ability);
+  height: var(--size-ability);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(var(--brand), var(--brand)) left calc((1 - var(--cd)) * 100%) / 100% 1px no-repeat,
+    linear-gradient(to top, var(--ability-fill) calc(var(--cd) * 100%), transparent 0),
+    var(--hud-track);
+  box-shadow: var(--hud-outline);
+}
+
+.hud-ability svg {
+  width: var(--icon-ability);
+  height: var(--icon-ability);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: var(--opacity-disabled);
+  filter: var(--hud-drop);
+}
+
+/* 对局里的键帽：同 .hud-slot kbd 的深色底 */
+.hud .hud-ability kbd {
+  background: var(--hud-track);
+  color: inherit;
+}
+
+/* 可用：图标和描边提亮，填充收起；刚冷却好时闪一下 */
+.hud-ability[data-ready] {
+  color: var(--foreground);
+}
+
+.hud-ability[data-ready] .hud-ability-tile {
+  border-color: var(--border-strong);
+  background: var(--hud-track);
+  animation: hud-ready var(--duration-ready) var(--ease-out);
+}
+
+.hud-ability[data-ready] svg {
+  opacity: 1;
+}
+
+/* 剩余秒数压在图标上，图标再淡一点让数字跳出来 */
+.hud-ability-tile > * {
+  grid-area: 1 / 1;
+}
+
+.hud-ability-cd {
+  font-size: var(--text-label);
+  font-weight: var(--font-weight-semibold);
+  color: var(--foreground);
+}
+
+.hud-ability[data-count] svg {
+  opacity: var(--opacity-dim-icon);
+}
+
+@keyframes hud-ready {
+  from { border-color: var(--brand); transform: scale(1.12); }
+  to { transform: none; }
+}
+
+/* ---------- 右上：练习场的命中统计（换掉得分和波次） ---------- */
+
+.hud-range {
+  display: none;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud[data-mode="range"] .hud-range {
+  display: flex;
+}
+
+.hud[data-mode="range"] .hud-score,
+.hud[data-mode="range"] .hud-wave[data-on] {
+  display: none;
+}
+
+.hud-range div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1-5);
+}
+
+.hud-range div + div {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-strong);
+}
+
+/* 数字留足宽度，从 9% 涨到 10% 时不把左边的项挤动 */
+.hud-range dd {
+  min-width: 4ch;
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0;
+  color: var(--foreground);
+}
+
+.hud[data-motion="reduced"] .hud-ability[data-ready] .hud-ability-tile {
+  animation: none;
+}
+
+/* ---------- 菜单：设置区和第二个按钮 ---------- */
+
+/* 三列：名称、控件、读数。分段单选跨后两列 */
+.hud-settings {
+  flex: 0 1 var(--w-settings);
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) var(--w-readout);
+  /* 和旁边的操作说明一样高时，首尾两行贴着上下两条线 */
+  align-content: space-between;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding-block: var(--space-5);
+  border-block: 1px solid var(--border);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud-field {
+  display: contents;
+}
+
+.hud-field-name {
+  white-space: nowrap;
+}
+
+.hud-field > .hud-seg {
+  grid-column: 2 / -1;
+  justify-self: start;
+}
+
+.hud-readout {
+  justify-self: end;
+  color: var(--foreground);
+  letter-spacing: 0;
+}
+
+/* 滑杆：一条细线，已调到的部分用品牌色，把手是一根竖条 */
+.hud-slider {
+  --fill: 0.5;
+  width: 100%;
+  height: var(--control-h);
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.hud-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand) calc(var(--fill) * 100%), var(--border-strong) 0);
+}
+
+.hud-slider::-webkit-slider-thumb {
+  width: var(--slider-thumb-w);
+  height: var(--slider-thumb-h);
+  /* 把手在 2px 的轨道上居中 */
+  margin-top: calc((2px - var(--slider-thumb-h)) / 2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--foreground);
+  box-shadow: var(--hud-outline);
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color var(--duration-fast) linear;
+}
+
+.hud-slider::-moz-range-track {
+  height: 2px;
+  background: var(--border-strong);
+}
+
+.hud-slider::-moz-range-progress {
+  height: 2px;
+  background: var(--brand);
+}
+
+.hud-slider::-moz-range-thumb {
+  width: var(--slider-thumb-w);
+  height: var(--slider-thumb-h);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--foreground);
+  box-shadow: var(--hud-outline);
+}
+
+.hud-slider:hover::-webkit-slider-thumb {
+  background: var(--brand-text);
+}
+
+.hud-slider:hover::-moz-range-thumb {
+  background: var(--brand-text);
+}
+
+.hud-slider:focus {
+  outline: none;
+}
+
+.hud-slider:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+/* 第二个按钮（练习场、切换玩法）：描边，不和主按钮抢 */
+.hud-btn.hud-btn-alt {
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--foreground);
+}
+
+.hud-btn.hud-btn-alt:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+/* 等第二次点击确认：红色描边，悬停也不变回品牌色 */
+.hud-btn.hud-btn-alt[data-confirm],
+.hud-btn.hud-btn-alt[data-confirm]:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: transparent;
+  color: var(--danger);
+}

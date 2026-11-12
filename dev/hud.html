@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HUD 预览 · 零号码头</title>
+    <link rel="stylesheet" href="../src/ui/tokens.css" />
+    <link rel="stylesheet" href="../src/ui/hud.css" />
+    <style>
+      /* 预览页自己的样式：假场景和调试面板，不属于游戏 UI，颜色直接写在这里 */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #05070a;
+      }
+
+      /* 假的游戏画面。几盏灯的白芯故意压在 HUD 四角后面，用来看字在高光上还读不读得清 */
+      .scene {
+        position: fixed;
+        inset: 0;
+        background:
+          radial-gradient(circle at 87% 8%, #fff 0, #ffdca8 1.4%, rgb(255 170 80 / 0.4) 6%, transparent 17%),
+          radial-gradient(circle at 11% 91%, #fff 0, #d6e8ff 1.6%, rgb(120 170 255 / 0.34) 7%, transparent 19%),
+          radial-gradient(circle at 90% 88%, #fff 0, #ffe2b4 1.8%, rgb(255 180 90 / 0.34) 8%, transparent 21%),
+          radial-gradient(circle at 50% 5%, rgb(255 255 255 / 0.92) 0, rgb(255 200 140 / 0.32) 5%, transparent 15%),
+          linear-gradient(90deg, transparent 6%, #7a2f22 6% 26%, transparent 26% 30%, #1f4a66 30% 53%, transparent 53% 61%, #8a7a2c 61% 80%, transparent 80%)
+            0 62% / 100% 24% no-repeat,
+          linear-gradient(180deg, transparent 64%, #0d1114 64%, #171d22 100%),
+          linear-gradient(180deg, #0a1322 0%, #1a2a40 38%, #46506a 57%, #b06a3c 64%);
+      }
+
+      /* 最坏情况：整屏接近白色 */
+      .scene[data-bg="bright"] {
+        background:
+          linear-gradient(90deg, transparent 6%, #c9442f 6% 26%, transparent 26% 30%, #2f7fb5 30% 53%, transparent 53% 61%, #e0c23a 61% 80%, transparent 80%)
+            0 62% / 100% 24% no-repeat,
+          linear-gradient(180deg, transparent 64%, #aeb6ba 64%, #d9dee0 100%),
+          linear-gradient(180deg, #ffffff 0%, #eef3f6 40%, #dfe6ea 64%);
+      }
+
+      .dev {
+        position: fixed;
+        left: 50%;
+        bottom: 10px;
+        z-index: 40;
+        transform: translateX(-50%);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px 14px;
+        width: max-content;
+        max-width: min(46vw, 760px);
+        padding: 6px 10px;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        background: rgb(0 0 0 / 0.78);
+        font: 12px/1.4 "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+        color: #cfd4d0;
+      }
+
+      .dev[data-collapsed] > :not(.dev-toggle) {
+        display: none;
+      }
+
+      .dev fieldset {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .dev legend {
+        float: left;
+        margin-right: 3px;
+        padding: 0;
+        color: #8d958f;
+      }
+
+      .dev button {
+        height: 22px;
+        padding: 0 7px;
+        border: 1px solid rgb(255 255 255 / 0.22);
+        border-radius: 2px;
+        background: rgb(255 255 255 / 0.06);
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .dev button:hover {
+        background: rgb(255 255 255 / 0.16);
+      }
+
+      .dev button[aria-pressed="true"] {
+        border-color: #f2a53a;
+        color: #f7bd66;
+      }
+
+      .dev output {
+        min-width: 9em;
+        align-self: center;
+        color: #8d958f;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scene" id="scene"></div>
+    <div id="hud"></div>
+    <form class="dev" id="dev" aria-label="HUD 调试面板"></form>
+    <script type="module" src="./hud.js"></script>
+  </body>
+</html>

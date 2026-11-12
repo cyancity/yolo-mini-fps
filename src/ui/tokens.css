@@ -1,0 +1,173 @@
+/*
+ * 零号码头 HUD 的设计 token。变量名沿用工作台预设（与 shadcn/ui 兼容），值是这款游戏的深色战术方案。
+ * 颜色、尺寸、阴影、时长的字面量只出现在本文件；hud.css 只引用变量
+ * （1~3px 的线宽、焦点环和准星这类组件固有尺寸除外）。
+ */
+
+:root {
+  /* HUD 缩放单位：间距和字号都乘它，跟着视口较短的一边缩放（1440×900 约 14.4px，1920×1080 约 17.3px） */
+  --hud-unit: clamp(0.8125rem, min(1.6vh, 1vw), 1.375rem);
+
+  /* 品牌：码头钠灯的琥珀色，只给当前栏位、进度和焦点环 */
+  --brand: #f2a53a;
+  --brand-foreground: #17120a;
+  --brand-text: #f7bd66;
+  --brand-soft: rgb(242 165 58 / 0.16);
+
+  /* 中性 */
+  --background: #080b0e;                   /* 加载时的整屏底色 */
+  --foreground: #eef1ec;                   /* HUD 主文字和线条 */
+  --card: rgb(8 11 14 / 0.62);             /* 加分条、横幅的衬底 */
+  --muted: rgb(255 255 255 / 0.07);        /* 键帽底 */
+  --muted-foreground: #c5cbc6;             /* 次要文字 */
+  --accent: rgb(255 255 255 / 0.12);       /* 悬停底色 */
+  --accent-foreground: var(--foreground);
+  --border: rgb(238 241 236 / 0.2);
+  --border-strong: rgb(238 241 236 / 0.42);
+  --primary: #eef1ec;
+  --primary-foreground: #0b0e10;
+  --ring: var(--brand);
+
+  /* 状态色 */
+  --warning: #ffb637;                      /* 弹匣见底 */
+  --danger: #ff4d3d;                       /* 空仓、低血、受击、击毁 */
+
+  /* 菜单遮罩：文字一侧更暗，另一侧留出画面 */
+  --overlay: rgb(5 7 9 / 0.66);
+  --overlay-strong: rgb(5 7 9 / 0.92);
+  --overlay-soft: rgb(5 7 9 / 0.38);
+  --blur-menu: 6px;
+
+  /* 压在明暗不定的画面上：文字用描边式投影（两层 1px 叠出一圈暗边，再加一层柔和的晕），细线元素用 1px 暗边 */
+  --hud-text-shadow: 0 0 1px #000, 0 0 1px #000, 0 0 2px rgb(0 0 0 / 0.8), 0 1px 3px rgb(0 0 0 / 0.6),
+    0 0 0.6em rgb(0 0 0 / 0.45);
+  --hud-outline: 0 0 0 1px rgb(0 0 0 / 0.58);
+  --hud-drop: drop-shadow(0 0 1px rgb(0 0 0 / 0.9));
+  --hud-track: rgb(0 0 0 / 0.5);           /* 生命条空槽 */
+  --hud-gap: rgb(0 0 0 / 0.85);            /* 生命条分段缝、罗盘刻度的暗边 */
+  --hud-scrim: linear-gradient(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.16)); /* 罗盘、波次、得分和练习场统计的暗底：明亮的天空前字也读得清，夜里不显眼 */
+  --mask-fade-x: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); /* 罗盘两端淡出 */
+  /* 受击方向弧：只留正上方约 70 度，两端渐隐 */
+  --mask-arc: conic-gradient(from -35deg, transparent, #000 14deg, #000 56deg, transparent 70deg, transparent);
+
+  /* 字体：系统自带，不下载。数字和拉丁字母走 DIN 风格，中文回落到系统黑体 */
+  --font-sans: "Bahnschrift", "DIN Alternate", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans SC", sans-serif;
+  --font-stretch-display: 87%;             /* 大号数字略收窄 */
+
+  /* 字阶 */
+  /* 1440×900 下中文标签不小于 14px、罗盘数字不小于 12px：label 是一个单位，caption 只给数字和拉丁字母 */
+  --text-caption: calc(var(--hud-unit) * 0.875);    /* 罗盘数字、拉丁副名、帧率 */
+  --text-label: var(--hud-unit);                    /* 模式、波次、栏位、键帽、操作说明 */
+  --text-body: calc(var(--hud-unit) * 1.125);       /* 武器名、按钮 */
+  --text-title: calc(var(--hud-unit) * 1.25);       /* 横幅、得分、菜单状态 */
+  --text-headline: calc(var(--hud-unit) * 1.875);   /* 生命值、备弹、战绩 */
+  --text-display: calc(var(--hud-unit) * 3.75);     /* 弹匣数、游戏名 */
+  --leading-tight: 1;
+  --leading-snug: 1.15;                    /* 菜单大标题 */
+  --leading-normal: 1.5;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --tracking-wide: 0.06em;                 /* 中文短词 */
+  --tracking-title: 0.16em;                /* 游戏名 */
+  --tracking-wider: 0.42em;                /* 拉丁副名、横幅 */
+
+  /* 间距 */
+  --space-0-5: calc(var(--hud-unit) * 0.125);
+  --space-1: calc(var(--hud-unit) * 0.25);
+  --space-1-5: calc(var(--hud-unit) * 0.375);
+  --space-2: calc(var(--hud-unit) * 0.5);
+  --space-3: calc(var(--hud-unit) * 0.75);
+  --space-4: var(--hud-unit);
+  --space-5: calc(var(--hud-unit) * 1.25);
+  --space-6: calc(var(--hud-unit) * 1.5);
+  --space-8: calc(var(--hud-unit) * 2);
+  --space-10: calc(var(--hud-unit) * 2.5);
+  --space-16: calc(var(--hud-unit) * 4);
+
+  /* 尺寸 */
+  --hud-inset: calc(var(--hud-unit) * 2.25);        /* HUD 到屏幕边缘 */
+  --menu-inset: clamp(var(--hud-inset), 9vw, calc(var(--hud-unit) * 11)); /* 菜单左边距 */
+  --control-h-sm: calc(var(--hud-unit) * 1.625);    /* 键帽 */
+  --control-h: calc(var(--hud-unit) * 2.25);        /* 画质分段按钮 */
+  --control-h-lg: calc(var(--hud-unit) * 3);        /* 主按钮 */
+  --icon: calc(var(--hud-unit) * 1.125);            /* 生命十字 */
+  --w-compass: calc(var(--hud-unit) * 30);
+  --h-compass-ticks: calc(var(--hud-unit) * 0.625);
+  --w-bar: calc(var(--hud-unit) * 11);              /* 生命条 */
+  --w-weapon: calc(var(--hud-unit) * 20);           /* 武器名一行的上限 */
+  --w-menu: calc(var(--hud-unit) * 36);
+  --w-key: calc(var(--hud-unit) * 4.5);             /* 操作说明的键帽列 */
+  --w-btn: calc(var(--hud-unit) * 13);
+  --size-reload: calc(var(--hud-unit) * 5);         /* 换弹进度环：比常见扩散下的准星大一圈，互不压线 */
+  --size-dmg: calc(var(--hud-unit) * 32);           /* 受击方向弧所在的圆：弧在半径的 84%~97%，正下方的弧要落在加分条（三行）外面 */
+  --cross-len: 8px;                                 /* 准星线长；准星全用整像素，保持锐利 */
+  --cross-w: 2px;
+  --cross-gap: 4px;                                 /* spread 为 0 时线到中心的距离 */
+  --hit-len: 24px;                                  /* 命中标记：四道斜线围成中间空着的 X，命中白色，击倒黄色 */
+  --hit-gap: 10px;                                  /* 停住时线的内端到准星中心 */
+  --hit-in: 6px;                                    /* 出现时线在外面多远，随后收到 --hit-gap */
+  --hit-w: 2.25px;
+  --hit: #ffffff;
+
+  --radius: 2px;
+  --radius-sm: 1px;
+  --opacity-disabled: 0.4;
+  --opacity-pulse: 0.55;                   /* 低血闪烁的谷值 */
+  --opacity-dim-icon: 0.2;                 /* 技能格显示冷却秒数时，图标压到这么淡 */
+  --opacity-mark-edge: 0.75;               /* 罗盘上钉在边上（视野外）的敌人标记 */
+  --hp-trail: rgb(255 77 61 / 0.55);       /* 生命条的掉血残影，--danger 半透明 */
+
+  --z-hud: 20;
+  --z-menu: 30;
+
+  /* 动效 */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+  --duration-hit: 220ms;                   /* 命中标记停留 */
+  --duration-kill: 420ms;                  /* 击毁标记停留 */
+  --duration-dmg: 1100ms;                  /* 受击方向弧停留 */
+  --duration-banner: 520ms;                /* 「第 N 波」横幅的入场 */
+  --duration-trail: 500ms;                 /* 生命条掉血残影缩回去的时长 */
+  --delay-trail: 400ms;                    /* 掉血后残影先停这么久再跟上 */
+  --duration-pulse: 900ms;                 /* 低血闪烁周期 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+
+  /* 菜单：开始菜单左边操作说明、右边设置；暂停菜单左边本局战绩、右边设置 */
+  --w-keys: calc(var(--hud-unit) * 32);
+  --w-settings: calc(var(--hud-unit) * 25);
+  --w-menu-wide: calc(var(--w-keys) + var(--space-10) + var(--w-settings));
+  --w-readout: 4.5ch;                      /* 滑杆读数列 */
+  --slider-thumb-w: 4px;                   /* 滑杆把手：细竖条 */
+  --slider-thumb-h: calc(var(--hud-unit) * 1.125);
+
+  /* 击倒反馈 */
+  --kill: #ffd84a;                         /* 击倒：命中标记、连杀数 */
+  --kill-head: var(--danger);              /* 加分条里的爆头那一行 */
+  --ticker-offset: calc(var(--hud-unit) * 5.25); /* 加分条顶边到准星中心，避开换弹环和最大扩散 */
+  --w-ticker: calc(var(--hud-unit) * 16);
+  --duration-tick: 1600ms;                 /* 加分明细停留 */
+  --duration-chain: 3000ms;                /* 连杀窗口：累计分停留 */
+
+  /* 技能栏 */
+  --size-ability: calc(var(--hud-unit) * 2.625);
+  --icon-ability: calc(var(--hud-unit) * 1.375);
+  --ability-fill: rgb(242 165 58 / 0.3);   /* 冷却中已恢复的部分，比 brand-soft 实一些，压在深色格子上看得出 */
+
+  /* 罗盘上剩余敌人的方位：用敌人身上的橙色识别色 */
+  --hostile: #ff6a1f;                      /* soldier_mesh.js 的 MARK 0xff5a14 经过色调映射后在屏幕上的样子 */
+  --size-mark: calc(var(--hud-unit) * 0.5);
+  --duration-ready: 420ms;                 /* 冷却好时的闪一下 */
+}
+
+/* 减少动效（设置里的「动态效果」，默认跟系统的 prefers-reduced-motion，hud.js 挂 data-motion）：过渡归零；
+   命中、受击、击杀信息的停留时长是功能性的，保留，但 hud.css 里会换成不带位移的版本 */
+.hud[data-motion="reduced"] {
+  --duration-fast: 0ms;
+  --duration-base: 0ms;
+  --duration-slow: 0ms;
+}

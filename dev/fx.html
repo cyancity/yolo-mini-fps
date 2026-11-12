@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>特效预览</title>
+  <script>
+    // fx.html?nohmr：断开热更新。别的模块在改动时页面不会被整页刷新，逐帧截图和量帧率才稳
+    if (new URLSearchParams(location.search).has('nohmr')) {
+      const Real = window.WebSocket;
+      window.WebSocket = function (url, protocols) {
+        if (String(protocols).includes('vite-')) return { addEventListener() {}, removeEventListener() {}, send() {}, close() {}, readyState: 0 };
+        return new Real(url, protocols);
+      };
+    }
+  </script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 12px/1.4 system-ui, "Microsoft YaHei", sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #bar { position: fixed; left: 12px; bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 70vw; }
+    #bar button { padding: 4px 9px; color: #d8dde3; background: rgba(18, 22, 28, 0.72); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 3px; cursor: pointer; font: inherit; }
+    #bar button[aria-pressed="true"] { color: #10141a; background: #e8b25a; border-color: #e8b25a; }
+    #stat { position: fixed; right: 12px; top: 10px; color: #c9d1da; font-variant-numeric: tabular-nums; text-align: right; white-space: pre; text-shadow: 0 1px 2px #000; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="bar"></div>
+  <div id="stat"></div>
+  <script type="module" src="./fx.js"></script>
+</body>
+</html>

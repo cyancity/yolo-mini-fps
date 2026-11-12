@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>音效试听</title>
+<script>
+  // ?nohmr：离线测量要连着跑几十秒，期间项目里别的文件一改，Vite 会让所有页面整页刷新把它打断。
+  // 把热更新的连接换成一个永远不通的假连接，这一页就不会被刷新了
+  if (location.search.includes('nohmr')) {
+    const Real = window.WebSocket;
+    window.WebSocket = function (url, protocol) {
+      return protocol === 'vite-hmr' ? Object.assign(new EventTarget(), { readyState: 0, send() {}, close() {} }) : new Real(url, protocol);
+    };
+  }
+</script>
+<style>
+  :root { color-scheme: dark; --bg: #0c0f13; --panel: #141920; --line: #232b36; --text: #d7dde5; --dim: #7d8896; --hot: #ffb454; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 32px 64px; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.04em; }
+  #state { color: var(--dim); font-variant-numeric: tabular-nums; }
+  #state.on { color: #7fd38a; }
+  label { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+  input[type=range] { width: 120px; accent-color: var(--hot); }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+  section { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  h2 { margin: 6px 0 0; font-size: 13px; font-weight: 500; color: var(--dim); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; font: 13px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+  button:hover { border-color: #3b4757; background: #1a212b; }
+  button:active, button.flash { background: #2a2416; border-color: var(--hot); }
+  button.on { border-color: var(--hot); color: var(--hot); }
+  button.main { font-family: inherit; border-color: #3b4757; }
+  table { border-collapse: collapse; margin-top: 18px; font: 12px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  th, td { padding: 2px 16px 2px 0; text-align: right; white-space: nowrap; }
+  th { color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  td.warn { color: #ff7b72; }
+  #report { margin: 18px 0 0; color: var(--dim); font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; }
+  #report:empty { display: none; }
+</style>
+</head>
+<body>
+<script type="module" src="./audio.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+/* 页面骨架：画布铺满视口，HUD 盖在上面 */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+
+#view {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

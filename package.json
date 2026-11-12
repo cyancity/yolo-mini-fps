@@ -1,0 +1,26 @@
+{
+  "name": "yolo-mini-fps",
+  "private": true,
+  "version": "0.1.0",
+  "description": "零号码头 DOCK ZERO：浏览器里的 FPS 学习案例，three.js 加 Vite",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyancity/yolo-mini-fps.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}
