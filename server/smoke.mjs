@@ -74,7 +74,7 @@ const nextIp = () => {
 async function call(srv, method, path, { body, raw, headers = {}, ip } = {}) {
   const h = { 'x-forwarded-for': ip ?? nextIp(), ...headers };
   const payload = body !== undefined ? JSON.stringify(body) : raw;
-  if (payload !== undefined) h['content-type'] = 'application/json';
+  if (payload !== undefined && !('content-type' in h)) h['content-type'] = 'application/json';
   const init = { method, headers: h, body: payload };
   if (payload instanceof ReadableStream) init.duplex = 'half';
   const res = await fetch(srv.base + path, init);
@@ -163,6 +163,9 @@ async function fieldRules(A) {
     ['time 29.9', { time: 29.9 }, 'time'], ['time 7200.1', { time: 7200.1 }, 'time'],
     ['time null', { time: null }, 'time'], ['time 是字符串', { time: '254.3' }, 'time'],
     ['penalty 负数', { penalty: -1 }, 'penalty'], ['penalty 大于 time', { penalty: 254.31 }, 'penalty'],
+    ['第 1 轮带罚时', { penalty: 5 }, 'penalty'], ['第 2 轮罚时和打空的发数对不上', { round: 2, penalty: 0 }, 'penalty'],
+    ['第 2 轮罚时报成和用时一样大', { round: 2, time: 30, penalty: 30, shots: 100, hits: 0 }, 'time'],
+    ['去掉罚时不足 30 秒', { round: 2, time: 40, penalty: 23.7 }, 'time'],
     ['shots 负数', { shots: -1 }, 'shots'], ['shots 超上限', { shots: 100001 }, 'shots'],
     ['shots 小数', { shots: 210.5 }, 'shots'],
     ['hits 大于 shots', { hits: 211 }, 'hits'], ['hits 负数', { hits: -1 }, 'hits'],
@@ -191,10 +194,11 @@ async function flow(A) {
   r = await submit(A, good(runA, { name: 'Other', time: 100 }));
   check('改了内容的重复提交仍返回第一次的结果', r.status === 200 && r.json?.id === idA1 && r.json?.rank === 1, r.json);
 
-  expectError('跳到第 3 轮', await submit(A, good(runA, { round: 3 })), 400, 'round_gap');
-  expectError('新的一局直接报第 2 轮', await submit(A, good(oldRun(), { round: 2 })), 400, 'round_gap');
-  expectError('两轮用时之和超过开局至今', await submit(A, good(runA, { round: 2, time: 3400 })), 400, 'time_mismatch');
-  r = await submit(A, good(runA, { round: 2, time: 3400, penalty: 100 }));
+  // 第 2 轮起罚时要和打空的发数对上：210 发中 131 发，打空 79 发，罚 23.7 秒
+  expectError('跳到第 3 轮', await submit(A, good(runA, { round: 3, penalty: 23.7 })), 400, 'round_gap');
+  expectError('新的一局直接报第 2 轮', await submit(A, good(oldRun(), { round: 2, penalty: 23.7 })), 400, 'round_gap');
+  expectError('两轮用时之和超过开局至今', await submit(A, good(runA, { round: 2, time: 3400, penalty: 23.7 })), 400, 'time_mismatch');
+  r = await submit(A, good(runA, { round: 2, time: 3400, penalty: 99.9, shots: 464 }));
   check('罚时不计入时间核对', r.status === 200 && r.json?.rank === 1, r.json);
 
   // 第 1 轮的榜：插入顺序决定 rank 的期望值
@@ -243,7 +247,7 @@ async function boardRules(A) {
   r = await getBoard(A, '?limit=2');
   check('limit 截断 rows，total 不变', r.json?.rows?.length === 2 && r.json?.total === 6, r.json);
   r = await getBoard(A, '?round=2');
-  check('第 2 轮的榜', r.json?.total === 1 && r.json?.rows?.[0]?.time === 3400 && r.json?.rows?.[0]?.penalty === 100, r.json);
+  check('第 2 轮的榜', r.json?.total === 1 && r.json?.rows?.[0]?.time === 3400 && r.json?.rows?.[0]?.penalty === 99.9, r.json);
   r = await getBoard(A, '?round=7');
   check('没人打过的轮次', r.status === 200 && r.json?.total === 0 && same(r.json?.rows, []) && same(r.json?.rounds, [1, 2]), r.json);
 
@@ -288,6 +292,7 @@ async function httpRules(A) {
   r = await call(A, 'POST', '/v1/runs', { raw: `{"pad":"${'x'.repeat(2038)}"}` });
   check('正好 2048 字节不算超', r.status === 200, r.status);
 
+  expectError('POST 不是 JSON 类型 415', await call(A, 'POST', '/v1/runs', { raw: '{}', headers: { 'content-type': 'text/plain' } }), 415, 'content_type');
   expectError('JSON 解析失败', await call(A, 'POST', '/v1/rounds', { raw: '{bad' }), 400, 'bad_json');
   expectError('JSON 是数组', await call(A, 'POST', '/v1/rounds', { raw: '[1,2]' }), 400, 'bad_json');
   expectError('JSON 是 null', await call(A, 'POST', '/v1/runs', { raw: 'null' }), 400, 'bad_json');
@@ -310,6 +315,12 @@ async function rateRules(A) {
   check('提交前 30 次不限流', last.status === 400, last.status);
   expectError('提交第 31 次 429', await call(A, 'POST', '/v1/rounds', { raw: '{}', ip }), 429, 'rate_limited');
   expectError('只认 X-Forwarded-For 最后一段', await call(A, 'POST', '/v1/rounds', { raw: '{}', ip: `1.2.3.4, ${ip}` }), 429, 'rate_limited');
+  // 同一个 /64 里换地址共用一份额度
+  for (let i = 0; i < 30; i++) last = await call(A, 'POST', '/v1/rounds', { raw: '{}', ip: `2001:db8:1:2::${(i + 1).toString(16)}` });
+  check('IPv6 同一个 /64 的前 30 次不是 429', last.status === 400, last.status);
+  expectError('IPv6 同一个 /64 换地址第 31 次 429', await call(A, 'POST', '/v1/rounds', { raw: '{}', ip: '2001:0db8:0001:0002:ffff::9' }), 429, 'rate_limited');
+  last = await call(A, 'POST', '/v1/rounds', { raw: '{}', ip: '2001:db8:1:3::1' });
+  check('IPv6 另一个 /64 不受影响', last.status === 400, last.status);
   last = await call(A, 'POST', '/v1/rounds', { raw: '{}', ip: `${ip}, 10.250.0.2` });
   check('别的 IP 不受影响', last.status === 400, last.status);
   last = await call(A, 'POST', '/v1/runs', { body: {}, ip });
@@ -359,7 +370,8 @@ async function storageRules(A, dirA, runA) {
 function adminRules(A, dirA) {
   const admin = (...args) => execFileSync(process.execPath, [ADMIN, ...args], { env: { ...process.env, DATA_DIR: dirA }, encoding: 'utf8' });
   check('admin list 列出记录', /YOLO/.test(admin('list')) && /Tie/.test(admin('list', '1')) && !/Tie/.test(admin('list', '2')));
-  check('admin delete-name 按归一化后的名字删', /已删除 1 条/.test(admin('delete-name', ' Ｄｏｃｋ', ' Zero')));
+  check('admin delete-name 不带 --yes 只报条数', /有 1 条记录/.test(admin('delete-name', ' Ｄｏｃｋ', ' Zero')) && /Dock Zero/.test(admin('list')));
+  check('admin delete-name 按归一化后的名字删', /已删除 1 条/.test(admin('delete-name', ' Ｄｏｃｋ', ' Zero', '--yes')));
   const id = /^\s*(\d+)\s+r1\s+250\.46/m.exec(admin('list', '1'))?.[1];
   check('admin delete <id>', id !== undefined && /已删除/.test(admin('delete', id)) && /没有 id/.test(admin('delete', id)));
 }

@@ -64,6 +64,7 @@ export function openStore(dir, { busyMs = 1000 } = {}) {
     byId: db.prepare('SELECT id, round, name, time, at FROM rounds WHERE id = ?'),
     deleteId: db.prepare('DELETE FROM rounds WHERE id = ?'),
     deleteName: db.prepare('DELETE FROM rounds WHERE name = ?'),
+    countName: db.prepare('SELECT COUNT(*) AS n FROM rounds WHERE name = ?'),
   };
   const board = {};
   const total = {};
@@ -107,6 +108,9 @@ export function openStore(dir, { busyMs = 1000 } = {}) {
     },
     deleteId(id) {
       return q.deleteId.run(id).changes;
+    },
+    countName(name) {
+      return q.countName.get(name).n;
     },
     deleteName(name) {
       return q.deleteName.run(name).changes;

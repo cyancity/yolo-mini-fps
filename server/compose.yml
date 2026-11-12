@@ -6,6 +6,16 @@ services:
     build: .
     image: dockzero-board
     restart: unless-stopped
+    # 只有 /data 卷可写，不带任何 capability，不许提权，内存和进程数封顶
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
     ports:
       - "127.0.0.1:8823:8823"
     environment:

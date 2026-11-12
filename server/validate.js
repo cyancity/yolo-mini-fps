@@ -10,6 +10,12 @@ const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const isNum = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 const cents = (x) => Math.round(x * 100) / 100;
 
+// 和游戏里的规则一致（src/game/rounds.js 的 MISS_FROM、MISS_PENALTY）：第 2 轮起步枪每打空一发罚 0.3 秒，改一边要改另一边。
+// 罚时不计入和服务器时间的对账，所以它必须能从发数算出来，不然把罚时报成和用时一样大就不用等了
+const MISS_FROM = 2;
+const MISS_PENALTY = 0.3;
+const MIN_TIME = 30; // 一轮的实际用时（不含罚时）下限，秒
+
 // 合法返回归一化后的名字，否则 null
 export function normalizeName(v) {
   if (typeof v !== 'string' || v.length > 256) return null;
@@ -23,10 +29,13 @@ export function checkRound(b) {
   const name = normalizeName(b.name);
   if (name === null) return { error: 'name' };
   if (!isInt(b.round, 1, 50)) return { error: 'round' };
-  if (!isNum(b.time, 30, 7200)) return { error: 'time' };
+  if (!isNum(b.time, MIN_TIME, 7200)) return { error: 'time' };
   if (!isNum(b.penalty, 0, b.time)) return { error: 'penalty' };
   if (!isInt(b.shots, 0, 100000)) return { error: 'shots' };
   if (!isInt(b.hits, 0, b.shots)) return { error: 'hits' };
+  const owed = b.round >= MISS_FROM ? (b.shots - b.hits) * MISS_PENALTY : 0;
+  if (Math.abs(b.penalty - owed) > 0.02) return { error: 'penalty' };
+  if (b.time - b.penalty < MIN_TIME) return { error: 'time' };
   if (!isInt(b.kills, 10, 500)) return { error: 'kills' };
   if (!isInt(b.headshots, 0, b.kills)) return { error: 'headshots' };
   if (!isNum(b.damage, 0, 100000)) return { error: 'damage' };

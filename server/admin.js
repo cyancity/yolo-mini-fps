@@ -1,14 +1,14 @@
 // 命令行管理，直接读写 DATA_DIR 下的 board.db。服务开着也能用（WAL）。
 //   node admin.js list [round]        最近 50 条
 //   node admin.js delete <id>         删一条
-//   node admin.js delete-name <名字>  删这个名字的全部记录
+//   node admin.js delete-name <名字>  列出这个名字的记录数；末尾加 --yes 才真删
 import { dataDir, openStore } from './store.js';
 import { normalizeName } from './validate.js';
 
 const USAGE = `用法：
   node admin.js list [round]
   node admin.js delete <id>
-  node admin.js delete-name <名字>`;
+  node admin.js delete-name <名字> [--yes]`;
 
 const [cmd, ...args] = process.argv.slice(2);
 
@@ -32,8 +32,12 @@ function run(store) {
   }
   if (cmd === 'delete-name') {
     // 库里存的是归一化后的名字，输入也按同样规则处理再比
-    const name = normalizeName(args.join(' '));
+    const yes = args.at(-1) === '--yes';
+    const name = normalizeName((yes ? args.slice(0, -1) : args).join(' '));
     if (name === null) return USAGE;
+    // 名字归一化以后才比（全角、多余空格都会命中同一个名字）：先看清会删多少条
+    const n = store.countName(name);
+    if (!yes) return `名字 ${JSON.stringify(name)} 有 ${n} 条记录。确认删除在命令末尾加 --yes`;
     return `已删除 ${store.deleteName(name)} 条，名字 ${JSON.stringify(name)}`;
   }
 }

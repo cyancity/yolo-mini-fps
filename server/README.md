@@ -29,7 +29,7 @@ token 的格式是 `<id>.<startMs>.<sig>`。id 是 12 字节随机数的 base64u
 
 名字先做 NFKC 归一化，去掉控制字符、零宽和方向控制这类格式字符，首尾去空白，中间连续空白压成一个，按码点算要有 1 到 12 个字符。榜上和库里存的都是归一化之后的名字。
 
-除了逐个字段的范围，服务还核对时间：这一局之前各轮的 `time - penalty` 加上本轮的，不能超过开局至今的时长再加 5 秒。第 2 轮起，这一局的上一轮必须已经交过。
+除了逐个字段的范围，服务还核对时间：这一局之前各轮的 `time - penalty` 加上本轮的，不能超过开局至今的时长再加 5 秒。第 2 轮起，这一局的上一轮必须已经交过。罚时不参加这项核对，所以它必须能从发数算出来：第 1 轮是 0，第 2 轮起等于 `(shots - hits) × 0.3`（容差 0.02，和游戏里 `src/game/rounds.js` 的规则一致，改一边要改另一边），否则报 `penalty`；去掉罚时后不足 30 秒报 `time`。
 
 同一局同一轮只收一次。重复提交返回 200 和第一次那条记录的 `id`、`rank`，不新增记录，也不改名字。
 
@@ -56,6 +56,7 @@ token 的格式是 `<id>.<startMs>.<sig>`。id 是 12 字节随机数的 base64u
 | 400 | `run` | token 缺失、格式不对或签名不对 |
 | 400 | `run_expired` | token 的开局时刻在未来，或早于 24 小时前 |
 | 400 | `name`、`round`、`time`、`penalty`、`shots`、`hits`、`kills`、`headshots`、`damage`、`tod` | 对应字段不合法，按这个顺序只报第一个 |
+| 415 | `content_type` | POST 的 `Content-Type` 不是 `application/json`。别的网站发不出不带预检的提交 |
 | 400 | `round_gap` | 这一局的上一轮还没交 |
 | 400 | `time_mismatch` | 各轮用时之和超过开局至今的时长 |
 | 400 | `sort`、`limit`、`round` | 排行榜的查询参数不合法 |
@@ -69,7 +70,7 @@ token 的格式是 `<id>.<startMs>.<sig>`。id 是 12 字节随机数的 base64u
 
 `Origin` 在允许名单里时回 `Access-Control-Allow-Origin` 和 `Vary: Origin`，不在名单里就不加 CORS 头，请求照常处理。`OPTIONS` 预检回 204，允许 `GET, POST, OPTIONS` 和 `content-type` 头，缓存 86400 秒。
 
-限流按客户端 IP 分开计数：`POST /v1/rounds` 每小时 30 次，`POST /v1/runs` 每小时 60 次，所有 `GET`（含 `/health`）每 10 分钟 240 次。计数在内存里，重启清零。
+限流按客户端 IP 分开计数（IPv6 按前 64 位算一个）：`POST /v1/rounds` 每小时 30 次，`POST /v1/runs` 每小时 60 次，所有 `GET`（含 `/health`）每 10 分钟 240 次。计数在内存里，重启清零。
 
 所有响应带 `Cache-Control: no-store` 和 `X-Content-Type-Options: nosniff`。一个请求 10 秒内收不完就断开。
 
@@ -154,7 +155,8 @@ docker compose down
 ```sh
 node admin.js list [round]        # 最近 50 条：id、轮次、用时、时间（UTC）、名字
 node admin.js delete <id>         # 删一条
-node admin.js delete-name <名字>  # 删这个名字的全部记录，名字按提交时的规则归一化后再比
+node admin.js delete-name <名字>  # 只报这个名字有多少条记录；名字按提交时的规则归一化后再比
+node admin.js delete-name <名字> --yes  # 真删
 ```
 
 本地在 `server/` 目录下运行。服务器上在容器里运行：

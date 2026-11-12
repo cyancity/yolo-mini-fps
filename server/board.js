@@ -145,14 +145,23 @@ function parseJson(text) {
 
 // ---- http ----
 
+// 限流用的键。IPv6 只取前 64 位：一个用户通常拿到整个 /64，逐个换地址不该各算一份额度
+function limitKey(ip) {
+  if (!ip.includes(':') || ip.startsWith('::ffff:')) return ip;
+  const [head, tail = ''] = ip.split('::');
+  const a = head ? head.split(':') : [], b = tail ? tail.split(':') : [];
+  const groups = ip.includes('::') ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b] : a;
+  return groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
+
 function clientIp(req) {
   if (config.trustProxy) {
     const xff = req.headers['x-forwarded-for'];
     // 只信最后一段：那是反代自己看到的对端，前面几段客户端可以随便写
     const last = typeof xff === 'string' ? xff.split(',').pop().trim() : '';
-    if (last) return last.slice(0, 64);
+    if (last) return limitKey(last.slice(0, 64));
   }
-  return req.socket.remoteAddress ?? 'unknown';
+  return limitKey(req.socket.remoteAddress ?? 'unknown');
 }
 
 function send(res, status, body) {
@@ -205,6 +214,8 @@ async function handle(req, res) {
       res.setHeader('Allow', [...Object.keys(route), 'OPTIONS'].join(', '));
       fail(405, 'method');
     }
+    // POST 只收 JSON：text/plain 这类「简单请求」不触发预检，别的网站能让访客的浏览器替它提交
+    if (req.method === 'POST' && !/^application\/json\b/i.test(req.headers['content-type'] ?? '')) fail(415, 'content_type');
     if (!limiter.hit(BUCKET[path] ?? 'get', clientIp(req))) fail(429, 'rate_limited');
     const params = new URLSearchParams(q < 0 ? '' : req.url.slice(q + 1));
     send(res, 200, await fn(req, ctx, params));

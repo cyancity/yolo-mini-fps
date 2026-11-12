@@ -10,7 +10,10 @@ const TOKEN = /^([A-Za-z0-9_-]{16})\.(\d{1,15})\.([A-Za-z0-9_-]{43})$/;
 // 有 BOARD_SECRET 就用它；否则沿用数据目录里的 secret 文件，没有就生成一个
 export function loadSecret(dir) {
   const fromEnv = process.env.BOARD_SECRET;
-  if (fromEnv) return Buffer.from(fromEnv, 'utf8');
+  if (fromEnv) {
+    if (fromEnv.length < 32) throw new Error('BOARD_SECRET 不足 32 个字符');
+    return Buffer.from(fromEnv, 'utf8');
+  }
   mkdirSync(dir, { recursive: true });
   const file = join(dir, 'secret');
   try {

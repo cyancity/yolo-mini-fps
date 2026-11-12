@@ -91,6 +91,7 @@ export class BoardView {
 
   // 轮次页签：有成绩的轮次（最多 MAX_TABS 个）加上正在看的那一轮。列表没变就不重建
   setRounds(list) {
+    list = list.filter(Number.isInteger); // 页签的字会进 innerHTML：只认整数
     this.list = list;
     const set = new Set([1, ...list.slice(0, MAX_TABS), this.round]);
     const rounds = [...set].sort((a, b) => a - b), key = rounds.join(',');
