@@ -243,6 +243,7 @@ export class Game {
     this.targets?.setActive(range);
     this.run.reset(this.time);
     this.rounds.reset(this.time);
+    this.leadRound = 1;
     this.cheated = false;
     if (!range) this.board.begin();
     this.smokeWant = 0;
@@ -323,8 +324,11 @@ export class Game {
       drones.spawnFor?.(this.wave, this.zone);
       audio.play('waveStart', { volume: 0.8 });
       const here = objectiveAt(p.x, p.y, p.z) === this.zone;
+      // 路线已经走进下一圈而这一轮还没结（最后一个区域没建起来被跳过了）：在这里补上
+      if (Math.ceil(this.routeI / ROUTE.length) > this.rounds.n) this.roundDone();
       // 第 2 轮起每轮的第一个目标带上轮次
-      const lead = this.rounds.n > 1 && (this.routeI - 1) % ROUTE.length === 0 ? `第 ${this.rounds.n} 轮 · ` : '';
+      const lead = this.rounds.n > 1 && this.leadRound !== this.rounds.n ? `第 ${this.rounds.n} 轮 · ` : '';
+      this.leadRound = this.rounds.n;
       hud.notice(`${lead}${here ? '肃清' : '前往'}${ZONE_NAME[this.zone]}`, 2600, 'wave');
     }
     const alive = drones.aliveCount + soldiers.aliveCount;

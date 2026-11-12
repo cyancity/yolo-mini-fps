@@ -80,10 +80,11 @@ class Choice {
   show(value) { this.seg.pick(value, false); }
 }
 
-// 文本框（名字）：失焦或回车才写回，输入途中不规整，免得中间的空格打不出来
+// 文本框（名字）：失焦或回车才写回，输入途中不规整，免得中间的空格打不出来。maxlength 按 UTF-16 码元算，
+// 放宽到两倍，字数由 settings 的规整来卡（按码点）
 export class TextField {
   constructor(row, key, def, id, onInput) {
-    row.innerHTML = `<label class="hud-field-name" for="${id}">${def.label}</label><input class="hud-input" id="${id}" type="text" maxlength="${def.max}" placeholder="${def.hint || ''}" autocomplete="off" spellcheck="false">`;
+    row.innerHTML = `<label class="hud-field-name" for="${id}">${def.label}</label><input class="hud-input" id="${id}" type="text" maxlength="${def.max * 2}" placeholder="${def.hint || ''}" autocomplete="off" spellcheck="false">`;
     this.input = row.querySelector('input');
     this.input.addEventListener('change', () => onInput(key, this.input.value));
     // 输入法选字时的回车不算

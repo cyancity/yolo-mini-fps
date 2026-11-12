@@ -198,7 +198,7 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 
 - 轮次在 `src/game/rounds.js`：`game.rounds.n` 是当前第几轮，`game.rounds.done` 是这一局打完的各轮成绩，`game.rounds.live(time, run, kills)` 是当前这一轮到现在的成绩（`{ round, time, penalty, shots, hits, headshots, kills, damage }`，`time` 已含罚时）。`game.js` 的 `objectives()` 在清完街道（`routeI` 走满一圈）时调 `roundDone()`：成绩定格、横幅「第 N 轮完成」、上报，下一轮从这一刻起算。打空罚时的起始轮次和秒数是 `MISS_FROM`、`MISS_PENALTY`。
 - 排行榜客户端在 `src/game/board.js`（`game.board`）：开局 `begin()` 领凭据，`report(r, tod)` 把一轮成绩放进 `pending`（存在 localStorage 的 `dockzero.board.pending.v1`），有名字就 `flush()` 报上去，`top(round, sort)` 拉榜单。`state` 是 `idle`、`sending`、`offline`、`rejected`，`last` 是最近报上去的一轮和名次。名字是设置项 `name`（`settings.js` 的 `cleanName` 和服务端同一套规整规则）。
-- 服务地址：页面开在 localhost 上时报给 `http://localhost:8823`（本机起 `node server/board.js`），其他域名报给正式地址，打包时可以用 `VITE_BOARD_URL` 改。本机没起服务时菜单里显示「排行榜连不上」，不影响玩。
+- 服务地址：页面开在 localhost 上时报给 `http://localhost:8823`（本机起 `node server/board.js`），正式站点（`cyancity.github.io`）报给正式地址，别的域名默认不连，打包时用 `VITE_BOARD_URL` 指定。本机没起服务时菜单里显示「排行榜连不上」，不影响玩。
 - 不上榜的局：开过 `__dbg.god()` 或用 `__dbg.play()` 注入输入的（`game.cheated`）。页面开在 localhost 上时照样报，方便脚本验收。
 - 界面在 `src/ui/hud_board.js`：`BoardView` 是菜单里的榜单（阵亡页直接带，开始和暂停页点「排行榜」把正文换成它，`.hud` 上挂 `data-board`），`RoundClock` 是右上角的轮次计时（`hud.setRound(r)`）。榜单显示前 10 名，自己不在里面时补在最后一行。
 - 脚本走一轮：`__dbg.play('waves')` 后每个目标等敌人刷出来，`game.soldiers.kill(s, null, 'torso')`、`game.drones.kill(d)` 清掉，`__dbg.frame(45, 1/30)` 推进；清完第 5 个目标看 `game.rounds.done` 和 `game.board.pending`、`game.board.last`。

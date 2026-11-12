@@ -33,7 +33,7 @@ export class BoardView {
     this.root.innerHTML = `
       <div class="hud-board-me">
         <label class="hud-field-name" for="${id}-name">名字</label>
-        <input class="hud-input" id="${id}-name" type="text" maxlength="12" placeholder="留名上榜" autocomplete="off" spellcheck="false">
+        <input class="hud-input" id="${id}-name" type="text" maxlength="24" placeholder="留名上榜" autocomplete="off" spellcheck="false">
         <span class="hud-board-status" role="status"></span>
       </div>
       <div class="hud-board-tabs">
@@ -54,8 +54,9 @@ export class BoardView {
     this.sortSeg.pick('time', false);
     this.setRounds([1]);
     this.input.addEventListener('change', () => {
-      this.settings?.set('name', this.input.value);
-      this.input.value = this.settings?.get('name') ?? '';
+      if (!this.settings) return;
+      this.settings.set('name', this.input.value);
+      this.input.value = this.settings.get('name');
     });
     this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) this.input.blur(); });
     this.button.addEventListener('click', () => this.toggle(!this.open));

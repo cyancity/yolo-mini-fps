@@ -51,13 +51,13 @@ export function openStore(dir, { busyMs = 1000 } = {}) {
   db.exec(SCHEMA);
 
   const q = {
-    find: db.prepare('SELECT id, time FROM rounds WHERE run = ? AND round = ?'),
+    find: db.prepare('SELECT id, time, name FROM rounds WHERE run = ? AND round = ?'),
     used: db.prepare('SELECT COALESCE(SUM(time - penalty), 0) AS used FROM rounds WHERE run = ? AND round < ?'),
     insert: db.prepare(`INSERT INTO rounds (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (run, round) DO NOTHING`),
-    // 只数这条记录之前就在库里的，重复提交时算出来的就是第一次的名次
+    // 只数这条记录之前就在库里的，重复提交时算出来的就是第一次的名次。自己以前更快的成绩不算别人
     rank: db.prepare(`SELECT COUNT(DISTINCT name) + 1 AS rank FROM rounds
-      WHERE round = ? AND time < ? AND id < ?`),
+      WHERE round = ? AND time < ? AND id < ? AND name <> ?`),
     rounds: db.prepare('SELECT DISTINCT round FROM rounds ORDER BY round'),
     recent: db.prepare(`SELECT id, round, name, time, at FROM rounds
       WHERE ? IS NULL OR round = ? ORDER BY id DESC LIMIT ?`),
@@ -75,12 +75,12 @@ export function openStore(dir, { busyMs = 1000 } = {}) {
     total[sort] = db.prepare(`SELECT COUNT(DISTINCT name) AS n FROM rounds WHERE round = ? ${FILTER[sort]}`);
   }
 
-  const rankOf = (round, time, id) => q.rank.get(round, time, id).rank;
+  const rankOf = (round, time, id, name) => q.rank.get(round, time, id, name).rank;
 
   return {
     find(run, round) {
       const row = q.find.get(run, round);
-      return row ? { id: row.id, rank: rankOf(round, row.time, row.id) } : null;
+      return row ? { id: row.id, rank: rankOf(round, row.time, row.id, row.name) } : null;
     },
     // 这一局在 round 之前各轮的有效用时（time - penalty）之和
     used(run, round) {
@@ -91,7 +91,7 @@ export function openStore(dir, { busyMs = 1000 } = {}) {
       const res = q.insert.run(run, r.round, r.name, r.time, r.penalty, r.shots, r.hits, r.headshots, r.kills, r.damage, r.tod, at);
       if (res.changes === 0) return this.find(run, r.round);
       const id = Number(res.lastInsertRowid);
-      return { id, rank: rankOf(r.round, r.time, id) };
+      return { id, rank: rankOf(r.round, r.time, id, r.name) };
     },
     board(round, sort, limit) {
       return { total: total[sort].get(round).n, rows: board[sort].all(round, limit) };
