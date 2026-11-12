@@ -8,6 +8,7 @@ import { buildSettings } from './hud_settings.js';
 import { KillFeedback } from './hud_kill.js';
 import { Abilities, RangeStats, CompassMarks, pct } from './hud_status.js';
 import { bindUiSounds } from './hud_sound.js';
+import { BoardView, RoundClock, lap } from './hud_board.js';
 
 const LOW_HEALTH = 30;
 const LOW_AMMO_RATIO = 0.2;
@@ -69,6 +70,8 @@ export class Hud {
     layer.dataset.motion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
 
     for (const which of ['button', 'again', 'alt']) this.el[which].addEventListener('click', (e) => this.onButton(e, which));
+    this.board = new BoardView(this);
+    this.roundClock = new RoundClock(this.el);
     bindUiSounds(this, KEY_GUARD_MS); // 发 'uiHover'、'uiClick'，游戏接到音效上
 
     this.setMode('waves');
@@ -173,6 +176,16 @@ export class Hud {
 
   setRange(stats) {
     this.range.set(stats);
+  }
+
+  // 右上角的轮次计时：r 是 rounds.js 的 live()
+  setRound(r) {
+    this.roundClock.set(r);
+  }
+
+  // 打完一轮的横幅：r 是 rounds.js 的 close()
+  roundDone(r) {
+    this.notice(`第 ${r.round} 轮完成 · ${lap(r.time)}`, 3200, 'wave');
   }
 
   // name 是 'dash' 或 'smoke'，ready01 为 1 时可用；remainSec 给了就在格子里显示剩余秒数
@@ -331,6 +344,7 @@ export class Hud {
     if (key !== v.menu) {
       v.menu = key;
       this.disarm();
+      this.board.menu(menu);
       if (!menu) {
         this.layer.removeAttribute('data-menu');
         // 淡出期间按钮还留着焦点的话，游戏里的空格会再次触发它
@@ -340,7 +354,7 @@ export class Hud {
         this.menuAt = performance.now();
         el.title.textContent = menu.title;
         this.setCause(null);
-        for (const part of MENU_PARTS) el[part].hidden = !menu.parts.includes(part);
+        for (const part of MENU_PARTS) if (part !== 'board') el[part].hidden = !menu.parts.includes(part);
         el.button.textContent = menu.button;
         el.button.disabled = !!menu.disabled;
         el.again.textContent = menu.again || '';
@@ -410,6 +424,11 @@ export class Hud {
       if (key === 'sprintMode') sprint(value);
       else if (key === 'motion') motion(value);
     });
+  }
+
+  // 排行榜：board 是 game/board.js 的客户端。要先 bindSettings（名字存在设置里）
+  bindBoard(board) {
+    if (this.settings) this.board.bind(board, this.settings);
   }
 
   on(event, cb) {

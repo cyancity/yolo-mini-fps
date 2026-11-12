@@ -183,6 +183,7 @@
 /* 目标区域、得分和练习场统计和罗盘一样垫一层暗底：朝天看时灰色的小字压在亮云上也读得清 */
 .hud-objective,
 .hud-score,
+.hud-round,
 .hud-range {
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius);
@@ -697,7 +698,8 @@
 
 /* 开始菜单：操作说明和设置并排；暂停菜单：本局战绩和设置并排。放不下时设置换到下一行 */
 .hud[data-menu="start"] .hud-panel,
-.hud[data-menu="paused"] .hud-panel {
+.hud[data-menu="paused"] .hud-panel,
+.hud[data-menu="dead"] .hud-panel {
   width: min(var(--w-menu-wide), 100%);
 }
 
@@ -1193,6 +1195,7 @@
 }
 
 .hud[data-mode="range"] .hud-score,
+.hud[data-mode="range"] .hud-round,
 .hud[data-mode="range"] .hud-objective[data-on] {
   display: none;
 }
@@ -1345,4 +1348,192 @@
   border-color: var(--danger);
   background: transparent;
   color: var(--danger);
+}
+
+/* ---------- 轮次计时（右上，得分下面） ---------- */
+
+.hud-round {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud-round b {
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--foreground);
+}
+
+/* 打空罚的秒数 */
+.hud-round i {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--warning);
+}
+
+.hud-round i:empty {
+  display: none;
+}
+
+/* ---------- 菜单：排行榜 ---------- */
+
+/* 阵亡页在战绩右边；开始和暂停页点「排行榜」后单独占着正文（操作说明、战绩、设置收起） */
+.hud-board {
+  flex: 1 1 var(--w-settings);
+  max-width: var(--w-board);
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding-block: var(--space-5);
+  border-block: 1px solid var(--border);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.hud[data-board] .hud-keys,
+.hud[data-board] .hud-stats,
+.hud[data-board] .hud-settings {
+  display: none;
+}
+
+.hud-board-me {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.hud-input {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0;
+  color: var(--foreground);
+  transition: border-color var(--duration-fast) linear;
+}
+
+.hud-input::placeholder {
+  color: var(--muted-foreground);
+  opacity: var(--opacity-pulse);
+}
+
+.hud-input:hover {
+  border-color: var(--foreground);
+}
+
+.hud-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.hud-field > .hud-input {
+  grid-column: 2 / -1;
+}
+
+.hud-board-status {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--brand-text);
+}
+
+.hud-board-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+}
+
+.hud-board table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.hud-board th,
+.hud-board td {
+  padding: var(--space-1-5) var(--space-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-weight: var(--font-weight-regular);
+}
+
+.hud-board th {
+  border-bottom: 1px solid var(--border);
+  letter-spacing: var(--tracking-wide);
+}
+
+.hud-board td {
+  color: var(--foreground);
+}
+
+/* 名次、用时、命中率、掉血四列定宽，名字占剩下的 */
+.hud-board th:nth-child(1) {
+  width: calc(var(--hud-unit) * 3.5);
+}
+
+.hud-board th:nth-child(3) {
+  width: calc(var(--hud-unit) * 5.5);
+}
+
+.hud-board th:nth-child(4) {
+  width: calc(var(--hud-unit) * 4.5);
+}
+
+.hud-board th:nth-child(5) {
+  width: calc(var(--hud-unit) * 4);
+}
+
+.hud-board th:nth-child(2),
+.hud-board td:nth-child(2) {
+  text-align: left;
+}
+
+.hud-board td:first-child {
+  color: var(--muted-foreground);
+}
+
+.hud-board td[data-flawless] {
+  color: var(--brand-text);
+}
+
+/* 自己那一行；不在前十时补在最后，上面隔一条线 */
+.hud-board tr[data-me] td {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+.hud-board tr[data-gap] td {
+  border-top: 1px solid var(--border);
+}
+
+.hud-board-note {
+  margin: 0;
+  padding: var(--space-4) var(--space-2);
+}
+
+.hud-board[hidden],
+.hud-board-note[hidden] {
+  display: none;
+}
+
+/* 阵亡页：战绩收到内容的宽度，剩下的给榜单（名字那一列不至于只剩几个字） */
+.hud[data-menu="dead"] .hud-stats {
+  flex: 0 1 auto;
 }

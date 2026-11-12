@@ -1,4 +1,4 @@
-// 菜单里的设置区：分段单选（画质、时段、动态效果、爪刀涂装）和带读数的滑杆（灵敏度、视野、亮度、音量）。
+// 菜单里的设置区：文本框（名字）、分段单选（画质、时段、动态效果、爪刀涂装）和带读数的滑杆（灵敏度、视野、亮度、音量）。
 // 控件按 SETTING_DEFS 生成，改动立刻写回 settings；settings 从别处变了也同步回控件。
 import { SETTING_DEFS } from '../game/settings.js';
 
@@ -80,16 +80,31 @@ class Choice {
   show(value) { this.seg.pick(value, false); }
 }
 
+// 文本框（名字）：失焦或回车才写回，输入途中不规整，免得中间的空格打不出来
+export class TextField {
+  constructor(row, key, def, id, onInput) {
+    row.innerHTML = `<label class="hud-field-name" for="${id}">${def.label}</label><input class="hud-input" id="${id}" type="text" maxlength="${def.max}" placeholder="${def.hint || ''}" autocomplete="off" spellcheck="false">`;
+    this.input = row.querySelector('input');
+    this.input.addEventListener('change', () => onInput(key, this.input.value));
+    // 输入法选字时的回车不算
+    this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) this.input.blur(); });
+  }
+
+  show(value) { if (value !== this.input.value) this.input.value = value; }
+}
+
 // 行的顺序就是 SETTING_DEFS 的顺序
 export function buildSettings(container, settings, idPrefix) {
   const controls = {};
-  const set = (key, value) => settings.set(key, value);
+  // 写回以后按规整过的值重画一次：值没变（比如只多打了空格）时 settings 不通知
+  const set = (key, value) => { settings.set(key, value); controls[key]?.show(settings.get(key)); };
   for (const [key, def] of Object.entries(SETTING_DEFS)) {
     const row = document.createElement('div');
     row.className = 'hud-field';
     row.dataset.key = key;
     const id = `${idPrefix}-set-${key}`;
-    const control = def.options ? new Choice(row, key, def, id, set) : new Slider(row, key, def, id, set);
+    const Control = def.text ? TextField : def.options ? Choice : Slider;
+    const control = new Control(row, key, def, id, set);
     control.show(settings.get(key));
     controls[key] = control;
     container.append(row);

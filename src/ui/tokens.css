@@ -141,6 +141,7 @@
   --w-keys: calc(var(--hud-unit) * 32);
   --w-settings: calc(var(--hud-unit) * 25);
   --w-menu-wide: calc(var(--w-keys) + var(--space-10) + var(--w-settings));
+  --w-board: calc(var(--hud-unit) * 34);            /* 排行榜的宽度上限 */
   --w-readout: 4.5ch;                      /* 滑杆读数列 */
   --slider-thumb-w: 4px;                   /* 滑杆把手：细竖条 */
   --slider-thumb-h: calc(var(--hud-unit) * 1.125);

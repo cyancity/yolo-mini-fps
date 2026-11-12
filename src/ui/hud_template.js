@@ -25,15 +25,16 @@ export const DAMAGE_ARCS = 4;
 // 罗盘上最多标几个敌人（剩余不多于这个数时才标）
 export const COMPASS_MARKS = 2;
 
-// parts：菜单里显示哪些区块。again 是「重新开始」；alt 是最后一个按钮：'range' 固定进练习场，'other' 切到当前玩法以外的那个
+// parts：菜单里显示哪些区块。again 是「重新开始」；alt 是切玩法的按钮：'range' 固定进练习场，'other' 切到当前玩法以外的那个；
+// board 是排行榜，rank 是把正文换成排行榜的按钮（hud_board.js），阵亡页直接带榜单所以不要按钮
 export const MENUS = {
   loading: { title: '零号码头', parts: ['keys', 'load'], button: '开始实战', disabled: true },
-  start: { title: '零号码头', parts: ['keys', 'settings', 'alt'], button: '开始实战', event: 'start', arg: 'waves', alt: 'range', focus: true },
-  paused: { title: '暂停', parts: ['stats', 'settings', 'again', 'alt'], button: '继续', event: 'resume', again: '重新开始', alt: 'other', focus: true },
+  start: { title: '零号码头', parts: ['keys', 'settings', 'alt', 'rank'], button: '开始实战', event: 'start', arg: 'waves', alt: 'range', focus: true },
+  paused: { title: '暂停', parts: ['stats', 'settings', 'again', 'alt', 'rank'], button: '继续', event: 'resume', again: '重新开始', alt: 'other', focus: true },
   // 阵亡时不聚焦按钮：玩家多半还在乱按，免得一个空格就重开
-  dead: { title: '阵亡', parts: ['stats', 'alt'], button: '重新开始', event: 'restart', alt: 'range' },
+  dead: { title: '阵亡', parts: ['stats', 'board', 'alt'], button: '重新开始', event: 'restart', alt: 'range' },
 };
-export const MENU_PARTS = ['keys', 'stats', 'settings', 'load', 'again', 'alt'];
+export const MENU_PARTS = ['keys', 'stats', 'settings', 'board', 'load', 'again', 'alt', 'rank'];
 
 // 实战里第一个目标出现以后，暂停里的「重新开始」和切玩法会丢掉本局：第一次点只把按钮换成这句话
 export const CONFIRM = { again: '放弃本局，重新开始', range: '放弃本局，去练习场' };
@@ -89,6 +90,7 @@ export const TEMPLATE = `
 <div class="hud-notice" data-ref="notice" role="status" aria-live="polite"></div>
 <div class="hud-tr">
   <div class="hud-score"><span data-ref="score">0</span><small>分</small></div>
+  <div class="hud-round" data-ref="round"><span data-ref="roundN"></span><b data-ref="roundT"></b><i data-ref="roundP"></i></div>
   <dl class="hud-range" data-ref="range">
     <div><dt>命中率</dt><dd data-ref="rangeAcc">—</dd></div>
     <div><dt>击倒</dt><dd data-ref="rangeKills">0</dd></div>
@@ -137,11 +139,13 @@ export const TEMPLATE = `
         ${STATS.waves.map((name) => `<div><dt>${name}</dt><dd>0</dd></div>`).join('')}
       </dl>
       <div class="hud-settings" data-ref="settings"></div>
+      <section class="hud-board" data-ref="board" aria-label="排行榜" hidden></section>
     </div>
     <div class="hud-actions">
       <button class="hud-btn" data-ref="button" type="button"></button>
       <button class="hud-btn hud-btn-alt" data-ref="again" type="button"></button>
       <button class="hud-btn hud-btn-alt" data-ref="alt" type="button"></button>
+      <button class="hud-btn hud-btn-alt" data-ref="rank" type="button">排行榜</button>
       <div class="hud-load" data-ref="load" role="progressbar" aria-label="加载进度" aria-valuemin="0" aria-valuemax="100">
         <div class="hud-load-bar"><i data-ref="loadBar"></i></div>
         <span class="hud-load-pct" data-ref="loadPct">0%</span>

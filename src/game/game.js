@@ -7,6 +7,8 @@ import { SoldierManager } from '../enemies/soldiers.js';
 import { RunStats } from './run_stats.js';
 import { wireAudio, updateAudio } from './game_audio.js';
 import { ROUTE, ZONE_NAME, objectiveAt, objectiveToward } from '../world/plan.js';
+import { Rounds } from './rounds.js';
+import { Board } from './board.js';
 
 const QUALITY = {
   // 低档不下雨、不画海面和地面倒影：开发时后台标签页默认用它
@@ -60,6 +62,11 @@ export class Game {
     this.targets = null;
     this.smoke = null;
     this.run = new RunStats();
+    // 轮次和排行榜：清完一圈五个区域算一轮，成绩报给 board。开过无敌、用脚本注入输入的局不上榜（本机开发除外）
+    this.rounds = new Rounds();
+    this.board = new Board();
+    this.cheated = false;
+    hud.bindBoard?.(this.board);
     this.fadeT = 1;
     this.reducedMotion = false;
     this.smokeWant = 0;
@@ -126,6 +133,7 @@ export class Game {
     else if (key === 'sprintMode') this.player.sprintMode = value;
     else if (key === 'fullscreen') this.input.setFullscreen(value === 'on');
     else if (key === 'volume') this.audio.setMaster(value);
+    else if (key === 'name') this.board.setName(value);
     else if (key === 'quality') this.applyQuality(value);
     else if (key === 'motion') {
       // 减弱：视野拉伸和喷气滚转只留三成，喷气的后处理（模糊、速度线）关掉，低血红晕不脉动
@@ -169,6 +177,7 @@ export class Game {
       hud.damage(angle, from?.x, from?.z);
       audio.play('hurt', { volume: 0.7 });
       this.damageFx = Math.min(1, this.damageFx + amount / 28);
+      this.rounds.hurt(amount);
       this.weapons.vm.punch(0.25, -0.1, 0.5, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 1.2);
     };
     player.onDeath = () => {
@@ -233,6 +242,9 @@ export class Game {
     this.targets?.reset();
     this.targets?.setActive(range);
     this.run.reset(this.time);
+    this.rounds.reset(this.time);
+    this.cheated = false;
+    if (!range) this.board.begin();
     this.smokeWant = 0;
     this.fx.clear();
     this.wave = 0;
@@ -270,7 +282,7 @@ export class Game {
 
   // 本局战绩：暂停和阵亡菜单用，字段见 hud.js 的 fillStats
   stats() {
-    return { mode: this.mode, wave: this.wave, zones: this.cleared, kills: this.kills, score: this.score, ...this.run.snapshot(this.time) };
+    return { mode: this.mode, wave: this.wave, round: this.rounds.n, zones: this.cleared, kills: this.kills, score: this.score, ...this.run.snapshot(this.time) };
   }
 
   // 只在本次运行切画质（省内存档、调试）：设置面板跟着显示，存档里还是玩家选的档
@@ -295,9 +307,10 @@ export class Game {
   }
 
   // 区域目标：沿 ROUTE 一圈圈推进。敌人驻守在目标区域里等玩家过去（soldiers_guard.js），无人机出几架由 drones.spawnFor 定；
-  // 清完补弹药，NEXT_IN 秒后给下一个。目标序号就是敌人的 level
+  // 清完补弹药，NEXT_IN 秒后给下一个。目标序号就是敌人的 level。走完一圈算一轮（roundDone），不停，接着走下一圈
   objectives() {
     const { drones, soldiers, hud, audio, player } = this, p = player.position;
+    if (player.invulnerable || this.input.fake) this.cheated = true;
     if (!this.waveActive && this.time >= this.nextWaveAt) {
       this.wave++;
       this.waveActive = true;
@@ -310,7 +323,9 @@ export class Game {
       drones.spawnFor?.(this.wave, this.zone);
       audio.play('waveStart', { volume: 0.8 });
       const here = objectiveAt(p.x, p.y, p.z) === this.zone;
-      hud.notice(`${here ? '肃清' : '前往'}${ZONE_NAME[this.zone]}`, 2600, 'wave');
+      // 第 2 轮起每轮的第一个目标带上轮次
+      const lead = this.rounds.n > 1 && (this.routeI - 1) % ROUTE.length === 0 ? `第 ${this.rounds.n} 轮 · ` : '';
+      hud.notice(`${lead}${here ? '肃清' : '前往'}${ZONE_NAME[this.zone]}`, 2600, 'wave');
     }
     const alive = drones.aliveCount + soldiers.aliveCount;
     if (this.waveActive && alive === 0 && this.time - this.waveAt > 1) {
@@ -320,10 +335,12 @@ export class Game {
       this.score += 250 * this.wave;
       hud.setScore(this.score);
       audio.play('waveClear', { volume: 0.8 });
-      hud.notice('区域已肃清', 2400, 'wave');
+      if (this.routeI % ROUTE.length === 0) this.roundDone();
+      else hud.notice('区域已肃清', 2400, 'wave');
       this.weapons.resupply();
     }
     hud.setObjective(ZONE_NAME[this.zone] || '', alive);
+    hud.setRound?.(this.rounds.live(this.time, this.run, this.kills));
     // 罗盘：玩家不在目标区域里时标区域的方位；剩下不多于 2 个敌人时标出他们（还没落地的士兵不标）
     _marks.length = 0;
     let goal = null;
@@ -339,6 +356,13 @@ export class Game {
     }
     hud.setCompassMarks?.(_marks);
     hud.setCompassGoal?.(goal);
+  }
+
+  // 清完一圈：这一轮的成绩定格、上报，下一轮从这一刻起算。难度跟着目标序号涨，第 2 轮起打空罚时（rounds.js）
+  roundDone() {
+    const r = this.rounds.close(this.time, this.run, this.kills);
+    this.hud.roundDone?.(r);
+    if (!this.cheated || this.board.local) this.board.report(r, this.settings?.get('timeOfDay'));
   }
 
   // 菜单背景：贴着地面的慢速环绕镜头

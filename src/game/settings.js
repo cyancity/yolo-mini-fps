@@ -5,7 +5,18 @@ const KEY = 'dockzero.settings.v1';
 const FOLLOW_SYSTEM = ['motion'];
 const prefersReduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// 排行榜上的名字：归一化后去掉看不见的字符（控制字符、零宽和方向控制、孤立代理项、显示成空白的韩文填充符），
+// 空白压成一个，最多 max 个字（按码点算）。和 server/validate.js 的 normalizeName 是同一套规则，改一边要改另一边
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Cs}]/gu;
+const FILLERS = new Set([0x115f, 0x1160, 0x3164, 0xffa0]);
+export const cleanName = (value, max = 12) => {
+  const s = String(value ?? '').normalize('NFKC').replace(INVISIBLE, '');
+  const kept = [...s].filter((ch) => !FILLERS.has(ch.codePointAt(0))).join('').replace(/\s+/gu, ' ').trim();
+  return [...kept].slice(0, max).join('').trim();
+};
+
 export const SETTING_DEFS = {
+  name: { label: '名字', text: true, max: 12, hint: '留名上榜', def: '' },
   sensitivity: { label: '鼠标灵敏度', min: 0.2, max: 3, step: 0.05, def: 1 },
   adsSensitivity: { label: '开镜灵敏度', min: 0.3, max: 1.5, step: 0.05, def: 0.55 },
   fov: { label: '视野', min: 60, max: 95, step: 1, def: 72 },
@@ -22,6 +33,7 @@ export const SETTING_DEFS = {
 function clean(key, value) {
   const d = SETTING_DEFS[key];
   if (!d) return undefined;
+  if (d.text) return cleanName(value, d.max);
   if (d.options) return d.options.some(([v]) => v === value) ? value : d.def;
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(d.max, Math.max(d.min, n)) : d.def;
