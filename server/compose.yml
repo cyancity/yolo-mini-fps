@@ -1,0 +1,24 @@
+# 零号码头排行榜。端口只绑本机回环，外面经 Caddy 的 handle_path /dockzero/* 进来。
+name: dockzero
+
+services:
+  board:
+    build: .
+    image: dockzero-board
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8823:8823"
+    environment:
+      # 客户端 IP 取 Caddy 写的 X-Forwarded-For 最后一段，限流才按真实玩家算
+      TRUST_PROXY: "1"
+      # 不设 BOARD_SECRET 时首次启动生成密钥，存在卷里的 /data/secret
+    volumes:
+      - board-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  board-data:
