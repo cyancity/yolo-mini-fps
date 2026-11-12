@@ -1,14 +1,25 @@
 import * as THREE from 'three';
 import { patchMaterial, inject, withWorldPos } from '../gfx/materials.js';
 import { canvasTexture } from '../gfx/geo.js';
+import { PERF } from '../engine/perf_flags.js';
 
 // 地面网格的边长，和积水宏观图覆盖的边长（宏观图镜像平铺，网格比它大也不会拉丝）
 export const GROUND_SIZE = 220;
 export const MACRO_SIZE = 120;
 // 地面喷涂图覆盖的方形范围（罩住全图）和分辨率
 export const PAINT = { x0: -32, z0: -50, size: 76, res: 2560 };
+// 帧率高的时候倒影隔帧重画，中间那帧接着用上一张：倒影按世界坐标投到地面上，镜头转了也还对得上，
+// 只有镜头平移的那一点视差差一帧。两次重画之间至少隔 MIRROR_GAP 秒；
+// 平均帧间隔短于 FAST_ON 进入这个状态、长于 FAST_OFF 退出（留一段回差，帧率在边上晃时不来回切）
+const MIRROR_GAP = 1 / 90, FAST_ON = 1 / 95, FAST_OFF = 1 / 80;
+// 隔帧重画时倒影四周多画这么一圈，镜头转过去的那一条边上才有东西可采（约 2.7 度，144 帧下每秒转 390 度以内都够）。
+// 代价是倒影的分辨率低一成
+const OVERSCAN = 1.1;
+// 镜头一帧里挪了这么远、或者转了这么多，就当成传送：地面看不看得见要重新认
+const JUMP2 = 1.5 * 1.5, TURN_COS = Math.cos(0.6);
 // 每帧都要用的临时量，不在渲染路径上现分配
 const _pos = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3(), _rot = new THREE.Matrix4();
+const _fwd = new THREE.Vector3();
 
 // 平面反射：把相机沿地面镜像再渲染一遍。带 mip 链，粗糙的湿沥青用高层 mip 加竖向多次采样拉出光带。
 class PlanarReflection {
@@ -17,6 +28,7 @@ class PlanarReflection {
     this.matrix = new THREE.Matrix4();
     this.rt = null;
     this.lods = 1;
+    this.fovY = 1.2; // 这张倒影的竖直视野（弧度），地面着色器按它换算采样偏移
   }
 
   resize(w, h) {
@@ -29,7 +41,8 @@ class PlanarReflection {
     this.lods = Math.floor(Math.log2(Math.max(w, h)));
   }
 
-  render(renderer, scene, camera) {
+  // wide：四周多画的比例（1 = 和主相机同一个视野）
+  render(renderer, scene, camera, wide = 1) {
     const vc = this.camera;
     const pos = _pos.setFromMatrixPosition(camera.matrixWorld);
     if (pos.y <= 0.01) return false;
@@ -41,7 +54,12 @@ class PlanarReflection {
     vc.lookAt(look.x, -look.y, look.z);
     vc.updateMatrixWorld(true);
     vc.projectionMatrix.copy(camera.projectionMatrix);
-    vc.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+    if (wide !== 1) {
+      vc.projectionMatrix.elements[0] /= wide;
+      vc.projectionMatrix.elements[5] /= wide;
+      vc.projectionMatrixInverse.copy(vc.projectionMatrix).invert();
+    } else vc.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+    this.fovY = 2 * Math.atan(1 / vc.projectionMatrix.elements[5]);
     this.matrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
     this.matrix.multiply(vc.projectionMatrix).multiply(vc.matrixWorldInverse);
     renderer.setRenderTarget(this.rt);
@@ -250,7 +268,27 @@ export class Ground {
     for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / tile, pos.getZ(i) / tile);
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.receiveShadow = true;
+    // 不透明物体里最后画：被墙和楼板挡住的地面不跑这个最贵的着色器，下面的可见性查询也才量得准
+    this.mesh.renderOrder = 1;
     this.enabled = true;
+    // 倒影的调度（__dbg.perf.mirror 关掉就每帧都画）：seen 地面上一次查出来看不看得见，
+    // age 距上次重画过了多久，fresh 手里有没有一张还能用的倒影
+    this.seen = true;
+    this.unseen = 0;
+    this.age = 0;
+    this.fresh = false;
+    this.fast = false;     // 是不是在隔帧重画
+    this.frameAvg = 1 / 60; // 平滑过的帧间隔（秒）
+    this.overscan = OVERSCAN;
+    this.lastTime = 0;
+    this.last = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: -1 };
+    this.query = null;   // 还没出结果的可见性查询
+    this.probing = false;
+    this.waited = 0;
+    this.drawn = false;  // 上一帧主通道画没画地面
+    this.eye = null;
+    this.mesh.onBeforeRender = (renderer, scene, camera) => this.probe(renderer, camera, true);
+    this.mesh.onAfterRender = (renderer, scene, camera) => this.probe(renderer, camera, false);
     // rainPuddle：雨看得见时积水水位再抬多少（省内存档不下雨，地面保持原样）
     this.wet = { wetness: 1, puddle: 0, rain: 1, rainPuddle: 0 };
     this.syncWet();
@@ -258,6 +296,7 @@ export class Ground {
 
   resize(w, h) {
     this.reflection.resize(Math.max(2, w >> 1), Math.max(2, h >> 1));
+    this.fresh = false;
   }
 
   // 时段用：潮湿程度、水洼大小、雨量（涟漪）、下雨时积水多涨多少。默认值就是夜景下着雨的样子
@@ -280,17 +319,76 @@ export class Ground {
     this.uniforms.uPlanarOn.value = 0;
   }
 
+  // 地面这一帧有没有像素通过深度测试：主通道画地面时前后各调一次。结果要过一两帧才拿得到
+  probe(renderer, camera, begin) {
+    if (camera !== this.eye) return;
+    const gl = renderer.getContext();
+    if (begin) {
+      this.drawn = true;
+      if (this.query || !PERF.mirror || !gl.createQuery) return;
+      this.query = gl.createQuery();
+      this.probing = true;
+      gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, this.query);
+    } else if (this.probing) {
+      this.probing = false;
+      gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
+    }
+  }
+
+  // 收上一次查询的结果，更新 seen。连着三次看不见才算看不见（门口、楼顶边上忽隐忽现时不来回切）
+  look(renderer, moved) {
+    const gl = renderer.getContext();
+    let result = null;
+    if (this.query && !this.probing) {
+      if (gl.getQueryParameter(this.query, gl.QUERY_RESULT_AVAILABLE)) {
+        result = !!gl.getQueryParameter(this.query, gl.QUERY_RESULT);
+        gl.deleteQuery(this.query);
+        this.query = null;
+        this.waited = 0;
+      } else if (++this.waited > 4) {
+        // 同步连跑多帧（调试用的 frame(n)）时结果一直出不来：当成看得见，照常画
+        result = true;
+      }
+    } else if (!this.query && !this.drawn) result = false; // 地面整个在视锥外，主通道没画它
+    this.drawn = false;
+    if (moved || result === true) { this.seen = true; this.unseen = 0; }
+    else if (result === false && ++this.unseen >= 3) this.seen = false;
+  }
+
+  // 阴影调度问：这一帧是不是轮到重画倒影（只在隔帧重画时才算重活，阴影让到另一帧）
+  heavy(dt) {
+    return this.enabled && PERF.mirror && this.seen && this.fast && dt > 0 && this.age + dt >= MIRROR_GAP;
+  }
+
   // 主通道之前调用：渲染镜像画面并更新地面材质参数
   update(renderer, scene, camera, time, frame) {
-    const u = this.uniforms;
+    const u = this.uniforms, dt = time - this.lastTime;
+    this.lastTime = time;
     u.uTime.value = time;
     u.uFrame.value = frame % 64;
-    u.uFovY.value = THREE.MathUtils.degToRad(camera.fov);
     this.syncWet();
-    if (!this.enabled) { u.uPlanarOn.value = 0; return; }
+    this.eye = camera;
+    if (dt > 0 && dt < 0.1) {
+      this.frameAvg += (dt - this.frameAvg) * (1 - Math.exp(-dt / 0.15));
+      this.fast = this.frameAvg < (this.fast ? FAST_OFF : FAST_ON);
+    }
+    const e = camera.matrixWorld.elements, l = this.last;
+    _fwd.set(-e[8], -e[9], -e[10]).normalize();
+    const moved = (e[12] - l.x) ** 2 + (e[13] - l.y) ** 2 + (e[14] - l.z) ** 2 > JUMP2 || _fwd.x * l.fx + _fwd.y * l.fy + _fwd.z * l.fz < TURN_COS;
+    l.x = e[12]; l.y = e[13]; l.z = e[14]; l.fx = _fwd.x; l.fy = _fwd.y; l.fz = _fwd.z;
+    if (PERF.mirror) this.look(renderer, moved);
+    else this.seen = true;
+    if (!this.enabled || !this.seen) { u.uPlanarOn.value = 0; this.fresh = false; return; }
+    // dt 不是正数（冻结、截图）时不隔帧，照原样每帧画；镜头刚传送过也马上重画
+    const fast = PERF.mirror && this.fast && dt > 0;
+    this.age += Math.max(0, dt);
+    if (fast && this.fresh && !moved && this.age < MIRROR_GAP) return;
     this.mesh.visible = false;
-    const ok = this.reflection.render(renderer, scene, camera);
+    const ok = this.reflection.render(renderer, scene, camera, fast ? this.overscan : 1);
     this.mesh.visible = true;
+    this.age = 0;
+    this.fresh = ok;
+    u.uFovY.value = this.reflection.fovY;
     u.tPlanar.value = this.reflection.rt.texture;
     u.uPlanarLods.value = this.reflection.lods;
     u.uPlanarOn.value = ok ? 1 : 0;

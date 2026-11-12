@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { LIGHT_BUDGET, MAP, ZONE, ROOF, RESERVED } from './plan.js';
 import { IndoorLight } from './indoor.js';
+import { ShadowSchedule } from './shadow_sched.js';
+import { PERF } from '../engine/perf_flags.js';
 
 const SUN_DIST = 120;    // 平行光离全图中心多远（阴影相机的远近裁面按它定的）
 const SHADOW_SPAN = 110; // 平行光阴影相机罩住的边长，米
@@ -27,8 +29,12 @@ export class Lighting {
     this.lamps = [];   // 人造灯：{ light, base（原本的颜色）, indoor, scale }，时段调光用
     this.time = 0;
     this.dynamicShadows = true;
+    // 画质档：一帧最多重画几张阴影图，同时定了每盏灯的刷新率（见 shadow_sched.js）
     this.perFrame = 2;
     this.sunWeight = 1;
+    this.sched = new ShadowSchedule(scene);
+    // 地面倒影（level.js 接上）：它隔帧重画的时候，阴影排到它不画的那一帧
+    this.mirror = null;
     // 阴影分帧刷新的欠账和权重，和 shadowed 一一对应（reweigh 里按长度重建）
     this.debt = new Float32Array(0);
     this.weight = new Float32Array(0);
@@ -181,11 +187,13 @@ export class Lighting {
     }
   }
 
-  // 阴影分帧刷新：每帧只重画 perFrame 张，静态关卡加上慢速移动的无人机足够了。
-  // 每盏灯按权重攒欠账，每帧挑欠得最多的重画
+  // 阴影分帧刷新：每盏灯按权重有自己的刷新率，只有投影范围里有东西在动的灯才重画（shadow_sched.js）。
+  // __dbg.perf.shadow = false 退回原来的做法：每帧固定重画 perFrame 张，按权重攒欠账、挑欠得最多的
   update(dt) {
     this.time += dt;
-    if (this.dynamicShadows) {
+    if (this.dynamicShadows && PERF.shadow) {
+      this.sched.update(dt, this.shadowed, this.weight, this.perFrame, !!this.mirror?.heavy(dt));
+    } else if (this.dynamicShadows) {
       const list = this.shadowed, debt = this.debt, n = Math.min(list.length, debt.length);
       for (let i = 0; i < n; i++) debt[i] += this.weight[i];
       for (let k = 0; k < this.perFrame; k++) {

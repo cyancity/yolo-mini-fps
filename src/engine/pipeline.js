@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { makeAOMaterial, makeBlurMaterial } from './post_ao.js';
-import { makeFogMaterial, updateFogLights } from './post_fog.js';
+import { makeFogMaterial, updateFogLights, FOG_STEP_LEN } from './post_fog.js';
 import { makeCompositeMaterial, makeTAAMaterial, makeCopyMaterial } from './post_taa.js';
 import { makeBloomDownMaterial, makeBloomUpMaterial, makeFinalMaterial } from './post_final.js';
+import { PERF } from './perf_flags.js';
 
 const HALTON = [
   [1 / 2, 1 / 3], [1 / 4, 2 / 3], [3 / 4, 1 / 9], [1 / 8, 4 / 9],
@@ -173,6 +174,7 @@ export class Pipeline {
       u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
       u.uFrame.value = fm;
       u.uTime.value = this.time;
+      u.uStepLen.value = PERF.fog ? FOG_STEP_LEN : 0;
       this.pass(mat.fog, rt.fog);
       mat.blur.uniforms.tInput.value = rt.fog.texture;
       mat.blur.uniforms.uTexel.value.copy(halfTexel);

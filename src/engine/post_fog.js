@@ -3,6 +3,8 @@ import { fsVert, depthLib } from './glsl.js';
 
 export const FOG_MAX_LIGHTS = 12;
 export const FOG_SHADOWED = 4;
+// 体积雾一步至少走多长（米）：近处的视线按它少走几步，见着色器里的 uStepLen
+export const FOG_STEP_LEN = 1;
 
 // 半分辨率体积光：沿视线步进，累加各聚光灯的单次散射。前 FOG_SHADOWED 盏灯读取
 // three 的阴影贴图，于是集装箱和无人机会在雾里切出光柱。输出 rgb = 内散射，a = 线性深度。
@@ -11,6 +13,8 @@ const fogFrag = /* glsl */ `
 ${depthLib}
 #define MAX_L ${FOG_MAX_LIGHTS}
 #define STEPS 22
+#define MIN_STEPS 8
+uniform float uStepLen;
 uniform mat4 uCamWorld;
 uniform vec3 uCamPos;
 uniform float uFrame;
@@ -74,12 +78,16 @@ void main() {
   float viewDist = length(Pv);
   vec3 dirW = normalize((uCamWorld * vec4(Pv / viewDist, 0.0)).xyz);
   float maxDist = min(viewDist, uMaxDist);
-  float stepLen = maxDist / float(STEPS);
+  // 步数跟着这条视线在雾里走多长：每步不短于 uStepLen 米，最少 MIN_STEPS 步、最多 STEPS 步（uStepLen = 0 时固定 STEPS 步）。
+  // 原来近处的墙和地面也走满 STEPS 步，一步只有十几厘米，比远处密了好几倍
+  float n = uStepLen > 0.0 ? clamp(ceil(maxDist / uStepLen), float(MIN_STEPS), float(STEPS)) : float(STEPS);
+  float stepLen = maxDist / n;
   float jitter = ign(gl_FragCoord.xy + uFrame * 5.588238);
   // 阳光的相位只跟视线方向有关，循环外算一次（和聚光灯同一条 Henyey-Greenstein）
   vec3 sunIn = uSunCol * (0.0555 / pow(1.3025 - 1.1 * dot(dirW, uSunDir), 1.5));
   vec3 acc = vec3(0.0);
   for (int i = 0; i < STEPS; i++) {
+    if (float(i) >= n) break;
     float t = (float(i) + jitter) * stepLen;
     vec3 p = uCamPos + dirW * t;
     float wisps = 0.55 + 0.9 * noise3(p * 0.33 + vec3(uTime * 0.22, -uTime * 0.05, uTime * 0.13));
@@ -123,6 +131,7 @@ export function makeFogMaterial() {
       uTime: { value: 0 },
       uDensity: { value: 0.012 },
       uMaxDist: { value: 80 },
+      uStepLen: { value: FOG_STEP_LEN },
       uLCount: { value: 0 },
       uLPos: { value: arr(FOG_MAX_LIGHTS, () => new THREE.Vector3()) },
       uLDir: { value: arr(FOG_MAX_LIGHTS, () => new THREE.Vector3(0, -1, 0)) },
