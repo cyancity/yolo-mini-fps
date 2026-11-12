@@ -1,0 +1,53 @@
+# main 有新提交时打包，发布到 GitHub Pages（仓库设置里 Pages 的来源要选 GitHub Actions）
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 默认只读；发布要用的权限只给 deploy 这个 job，装依赖和打包的那个 job 拿不到
+permissions:
+  contents: read
+
+# 同一时间只发布一次；排队的只留最新一次，已经在发布的不打断
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: read # configure-pages 读站点的路径
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - id: pages
+        uses: actions/configure-pages@v6
+      - run: npm ci
+      # 站点在 /<仓库名>/ 下，base 取 Pages 给的路径，仓库改名或被 fork 也不用改这里
+      - run: npm run build -- --base="$BASE_PATH/"
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

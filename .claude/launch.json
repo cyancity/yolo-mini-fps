@@ -28,6 +28,20 @@
         "--strictPort"
       ],
       "port": 5184
+    },
+    {
+      "name": "game-pages",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "preview",
+        "--",
+        "--base=/yolo-mini-fps/",
+        "--port",
+        "5185",
+        "--strictPort"
+      ],
+      "port": 5185
     }
   ]
 }

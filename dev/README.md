@@ -26,6 +26,13 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - `bench(n)` 连跑 n 帧，返回每帧毫秒数、draw call 和三角形数。
 - `input.press(code)` / `input.release(code)` 模拟按键，`game`、`player`、`level`、`scene`、`camera`、`pipeline`、`mats`、`audio`、`hud` 直接可用。
 
+## 线上版本（GitHub Pages）
+
+- 推到 `main` 的提交由 `.github/workflows/pages.yml` 打包，发布到 `https://cyancity.github.io/yolo-mini-fps/`。打包入口只有 `index.html`，`dev/` 的预览页不上线。
+- 站点在子路径下。base 由工作流用 `--base` 传进去，仓库里没有写死，本地 `npm run build`、`npm run preview` 仍在根路径。
+- 改了资源加载、动态 `import()` 或 `index.html` 之后，按线上的子路径在本地核对一遍：`npm run build -- --base=/yolo-mini-fps/` 打包（Git Bash 里前面加 `MSYS_NO_PATHCONV=1`，否则这个路径会被改写成 Windows 路径），再起 `.claude/launch.json` 的 `game-pages`（端口 5185，等同 `npm run preview -- --base=/yolo-mini-fps/`），打开 `http://localhost:5185/yolo-mini-fps/?lite`。子路径下写成根路径的地址会直接 404。
+- 核对项：控制台没有报错，网络里没有 404，`__dbg.mats.photo` 为 true（照片贴图加载到了），`__dbg.game.soldiers.debugInfo().body` 是 `rig`（骨骼模型打进了包，`standin` 说明退回了胶囊小人）。
+
 ## 分区模块
 
 堆场以外的区域各是一个模块：`src/world/zones/<名>.js` 导出 `build(ctx)`，`level.js` 建完堆场后依次调用，某个模块抛错只会少掉那一块。总平面、标高、门洞、哪道墙归谁建都在 `src/world/plan.js`。

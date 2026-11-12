@@ -10,7 +10,7 @@
 ![three.js r187](https://img.shields.io/badge/three.js-r187-black)
 ![Vite 8](https://img.shields.io/badge/Vite-8-646CFF)
 
-[快速开始](#快速开始) · [操作](#操作) · [内容](#内容) · [画面是怎么出来的](#画面是怎么出来的) · [这个项目是怎么写出来的](#这个项目是怎么写出来的) · [素材与许可](#素材与许可)
+[在线试玩](https://cyancity.github.io/yolo-mini-fps/) · [快速开始](#快速开始) · [操作](#操作) · [内容](#内容) · [画面是怎么出来的](#画面是怎么出来的) · [这个项目是怎么写出来的](#这个项目是怎么写出来的) · [素材与许可](#素材与许可)
 
 <img src="docs/images/hero-night.jpg" width="900" alt="雨后的夜晚，集装箱堆场，仓库屋顶亮着 DOCK 0 的灯牌">
 
@@ -26,7 +26,11 @@
 
 ## 快速开始
 
-需要 Node.js 20.19 及以上的 20.x，或 22.12 及以上，一台带独立显卡的电脑，桌面版 Chrome 或 Edge。
+需要一台带独立显卡的电脑，桌面版 Chrome 或 Edge。
+
+不用安装，点开就能玩：<https://cyancity.github.io/yolo-mini-fps/>。卡的话在地址后加 `?lite`，用最省的配置启动：<https://cyancity.github.io/yolo-mini-fps/?lite>。
+
+在本机跑还需要 Node.js 20.19 及以上的 20.x，或 22.12 及以上：
 
 ```bash
 git clone https://github.com/cyancity/yolo-mini-fps.git
@@ -39,7 +43,7 @@ npm run dev
 
 画质在菜单的设置里选：低、中、高、超高，默认高。卡的话先降画质；用 `http://localhost:5173/?lite` 打开会用最省的配置启动。
 
-`npm run build` 打包到 `dist/`，`npm run preview` 在本机预览打包结果。
+`npm run build` 打包到 `dist/`，`npm run preview` 在本机预览打包结果。推到 `main` 的提交由 `.github/workflows/pages.yml` 打包并发布到上面的试玩地址。
 
 ## 操作
 
