@@ -7,6 +7,7 @@ import { updateGun, GUN } from './soldiers_gun.js';
 import { think, act, hear, route, finishRoute } from './soldier_ai.js';
 import { THINK, enterCombat, investigate } from './soldiers_states.js';
 import { pickSpawns } from './soldiers_spawn.js';
+import { spawnGuards } from './soldiers_guard.js';
 import { CONTACT } from './contact.js';
 import { suppress } from './soldiers_react.js';
 import { pickCorpse, sinkStep, SINK } from './soldiers_corpse.js';
@@ -28,7 +29,7 @@ function record(i) {
   return {
     id: i, bit: 1 << i, rig: null, alive: false, broken: false, level: 1, hp: 100, maxHp: 100,
     pos: V(), vel: V(), vy: 0, grounded: true, surface: 'asphalt', yaw: 0, crouch: 0, crouchWant: 0, eye: V(), chest: V(),
-    state: 'patrol', stateT: 0, hunter: false, waitT: 0, urgent: false,
+    state: 'patrol', stateT: 0, hunter: false, waitT: 0, urgent: false, zone: '', station: V(), // 驻守的区域和岗位（soldiers_guard.js）
     home: V(), goal: V(), needPath: false, speedWant: 0, arrived: true,
     path: new Float32Array(MAX_WP * 3), pathN: 0, pathI: 0,
     nudge: V(), nudgeT: 0, stuck: 0, progT: 0, progPos: V(), progD: 0, stride: 0,
@@ -176,7 +177,12 @@ export class SoldierManager {
     this.maxShooters = Math.max(this.baseShooters, Math.min(T.shootersCap, this.baseShooters + (this.openT > T.pressureT ? 1 : 0)));
   }
 
-  // 每波从地图边上的出生点进场，朝玩家所在的大致区域压过来
+  // 区域目标：刷在 zone（level.spawns 的 zone 字段）自己的出生点上驻守，不上门找人。返回刷了几个
+  spawnGarrison(zone, count, level = 1, player = this.player) {
+    return spawnGuards(this, zone, count, level, player);
+  }
+
+  // 从地图各处的出生点进场，朝玩家所在的大致区域压过来（游戏流程已经不用，dev 的量法脚本还在用）
   spawnWave(count, level = 1, player = this.player) {
     this.player = player || this.player;
     this.setLevel(level);
@@ -227,8 +233,8 @@ export class SoldierManager {
     const n = this.nav.ready ? this.nav.nearest(x, y, z, 2) : -1;
     if (n >= 0) s.pos.set(this.nav.cx(n), this.nav.nY[n], this.nav.cz(n)); else s.pos.set(x, y, z);
     Object.assign(s, {
-      alive: true, broken: false, level, hp: 100 + Math.min(40, 5 * (level - 1)), vy: 0, grounded: true, crouch: 0, crouchWant: 0,
-      state: 'patrol', stateT: 0, hunter: !!opts.hunter, waitT: opts.wait || 0, urgent: false,
+      alive: true, broken: false, level, hp: TUNE.soldierHp, vy: 0, grounded: true, crouch: 0, crouchWant: 0,
+      state: 'patrol', stateT: 0, hunter: !!opts.hunter, waitT: opts.wait || 0, urgent: false, zone: opts.zone || '',
       needPath: false, speedWant: 0, arrived: true, pathN: 0, pathI: 0, nudgeT: 0, stuck: 0, progT: 0, stride: 0,
       thinkT: (s.id / POOL) * THINK, sees: false, visEye: false, visChest: false, seeT: 0, lostT: 99, reaction: 0.5,
       knownT: -99, lastSeenT: -99, alertT: -99, hurtT: -99, hurtSoundT: -99, heardT: -99, lookT: 0, lookDur: rand(1, 3), searchT: 0,
@@ -242,6 +248,7 @@ export class SoldierManager {
     Object.assign(s.gun, { mag: GUN.mag, reloadT: 0, burst: 0, shotT: 0, cool: 0, bursts: 0, shot: 0, lag: 0 });
     s.vel.set(0, 0, 0);
     s.home.copy(s.pos);
+    s.station.copy(s.pos);
     s.progPos.copy(s.pos);
     s.lastKnown.copy(s.pos);
     const pp = this.player?.position;
@@ -383,15 +390,12 @@ export class SoldierManager {
     return best ? { target: best, point: _p.clone(), dist: bd, part } : null;
   }
 
-  // 结算一次命中：部位倍率 头 4、躯干 1、四肢 0.7。silent：不放 bodyHit（刀有自己的命中声）
+  // 结算一次命中：部位倍率 头 4、躯干 1、四肢 0.7，血量固定 TUNE.soldierHp。silent：不放 bodyHit（刀有自己的命中声）
   hit(target, damage, point, dir, part = 'torso', { silent = false } = {}) {
     const s = target;
     if (!s || !s.alive || !this.active.includes(s)) return NO_HIT;
     if (part !== 'head' && part !== 'limb') part = 'torso';
-    let dmg = damage * (part === 'head' ? 4 : part === 'limb' ? 0.7 : 1);
-    // 随波次多出来的血量算护甲：步枪爆头照样一枪倒
-    if (part === 'head' && dmg >= 100) dmg = Math.max(dmg, s.hp);
-    s.hp -= dmg;
+    s.hp -= damage * (part === 'head' ? 4 : part === 'limb' ? 0.7 : 1);
     s.hurtT = this.time;
     if (dir) _n.copy(dir).negate(); else _n.set(0, 1, 0);
     const at = point || s.chest;

@@ -16,7 +16,7 @@
 
 </div>
 
-> DOCK ZERO is a browser FPS built as a study case: how close can a web page get to AAA-looking graphics? One dockside map, three times of day, a rifle, a karambit and a smoke grenade, waves of soldiers and drones. It runs on three.js and Vite with no other dependencies, and geometry, materials, effects and sounds are almost all generated in code. Nearly all of the code was written by Claude. The game UI and the docs are in Chinese.
+> DOCK ZERO is a browser FPS built as a study case: how close can a web page get to AAA-looking graphics? One dockside map, three times of day, a rifle, a karambit and a smoke grenade, and five zones held by soldiers and drones that you clear one after another. It runs on three.js and Vite with no other dependencies, and geometry, materials, effects and sounds are almost all generated in code. Nearly all of the code was written by Claude. The game UI and the docs are in Chinese.
 
 ## 适合谁
 
@@ -39,7 +39,7 @@ npm install
 npm run dev
 ```
 
-打开终端里给出的地址（默认 `http://localhost:5173`），加载完点「开始实战」打波次，或者进「练习场」打靶。开始时默认进全屏，F11 切换，设置里可以关。
+打开终端里给出的地址（默认 `http://localhost:5173`），加载完点「开始实战」一个区域一个区域地肃清，或者进「练习场」打靶。开始时默认进全屏，F11 切换，设置里可以关。
 
 画质在菜单的设置里选：低、中、高、超高，默认高。卡的话先降画质；用 `http://localhost:5173/?lite` 打开会用最省的配置启动。
 
@@ -98,7 +98,7 @@ npm run dev
 
 ### 敌人和练习场
 
-实战是武装人员加无人机的波次，打到阵亡为止，结算波次、击倒数和得分。武装人员会巡逻、听枪声、找掩体、探头射击和包抄；无人机会搜索、开火，被击落时爆炸。
+实战是一串区域目标：堆场、仓库、办公楼、楼顶、街道，再回堆场，一圈圈打下去，直到阵亡，结算肃清的区域数、击倒数和得分。武装人员守在目标区域里，不上门找人，要玩家自己打过去；他们会站岗、听枪声、找掩体、探头射击和包抄，步枪打躯干 3 发倒、爆头 1 发。无人机会搜索、开火，被击落时爆炸。
 
 练习场没有敌人，只有固定、移动、弹出三种靶子，弹药不限，显示命中率和爆头率。
 

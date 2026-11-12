@@ -35,12 +35,12 @@ export const MENUS = {
 };
 export const MENU_PARTS = ['keys', 'stats', 'settings', 'load', 'again', 'alt'];
 
-// 波次模式打到第 1 波以后，暂停里的「重新开始」和切玩法会丢掉本局：第一次点只把按钮换成这句话
+// 实战里第一个目标出现以后，暂停里的「重新开始」和切玩法会丢掉本局：第一次点只把按钮换成这句话
 export const CONFIRM = { again: '放弃本局，重新开始', range: '放弃本局，去练习场' };
 
-// 战绩栏：波次模式六项（三列两行），练习场三项，多出来的格子藏起来；hud.js 按玩法换名称和数值
+// 战绩栏：实战六项（三列两行），练习场三项，多出来的格子藏起来；hud.js 按玩法换名称和数值
 export const STATS = {
-  waves: ['波次', '击倒', '得分', '命中率', '爆头', '存活'],
+  waves: ['肃清区域', '击倒', '得分', '命中率', '爆头', '存活'],
   range: ['命中率', '击倒', '爆头率'],
 };
 // 阵亡页标题下的死因：player.takeDamage 的第三个参数
@@ -77,12 +77,13 @@ export const TEMPLATE = `
 <div class="hud-top">
   <div class="hud-compass" aria-hidden="true">
     <div class="hud-compass-track" data-ref="track">${compassLabels()}</div>
+    <div class="hud-compass-marks hud-compass-goal" data-ref="goal"><i></i></div>
     <div class="hud-compass-marks" data-ref="marks">${'<i></i>'.repeat(COMPASS_MARKS)}</div>
     <i class="hud-compass-caret"></i>
   </div>
-  <div class="hud-wave" data-ref="wave">
-    <span>第 <b data-ref="waveNo">0</b> 波</span>
-    <span class="hud-wave-left"><span data-ref="waveLeftName">剩余</span> <b data-ref="waveLeft">0</b></span>
+  <div class="hud-objective" data-ref="objective">
+    <b data-ref="zone"></b>
+    <span class="hud-objective-left">剩余 <b data-ref="left">0</b></span>
   </div>
 </div>
 <div class="hud-notice" data-ref="notice" role="status" aria-live="polite"></div>

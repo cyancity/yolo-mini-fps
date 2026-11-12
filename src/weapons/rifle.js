@@ -16,6 +16,9 @@ import { impactSound } from '../audio/table.js';
 export { RIFLE_TUNE, RIFLE_POSES } from './rifle_anim.js';
 
 const RPM = 720, MAG = 30, RESERVE = 150, DAMAGE = 26, RANGE = 320;
+// 打武装人员单列一个数：100 血，躯干 3 发、四肢（×0.7）4 发、爆头（×4）1 发，倍率在 soldiers.js 的 hit。
+// 靶子和无人机仍按 DAMAGE 结算：练习场的发数和靶子挨打的晃动幅度不跟着变
+const DAMAGE_SOLDIER = 36;
 // 换弹的音效节点（秒）：抽匣（空仓时是旧弹匣脱落，同一刻生成掉在地上的弹匣）、入匣（子弹这一刻算进去）、空仓时放枪机。
 // 动作表在 rifle_reload.js，按它的关键帧对齐：左手离开护木（reloadGrab）、按卡笋（magRelease）、
 // 画面外换匣 / 去取新匣（reloadGrab）、匣口碰到井口（magSeat）、左手回到护木（reloadSettle）
@@ -253,7 +256,7 @@ export class Rifle {
     fx.muzzleFlash(_m, _d, 1);
     fx.tracer(_m, _end, {});
     if (hit?.enemy) {
-      const r = env.strike(hit, DAMAGE, _d);
+      const r = env.strike(hit, hit.enemy.kind === 'soldier' ? DAMAGE_SOLDIER : DAMAGE, _d);
       env.hud.hitmarker(r.killed);
       audio.play(r.headshot ? 'headshot' : 'hitmarker', { volume: 0.5 });
     } else if (hit) {

@@ -32,11 +32,12 @@ const LONG_NAME = 'KR-7 突击步枪 · 夜间行动涂装 · 消音器 · 全�
 const MAG = 30;
 const RELOAD_S = 1.8;
 const COOLDOWN = { dash: 1.6, smoke: 8 };
-const BREAK_S = 6; // 清场后到下一波，同 game.js
+const BREAK_S = 4; // 清完一个区域到下一个目标出现，同 game.js 的 NEXT_IN
+const ZONES = ['堆场', '仓库', '办公楼', '楼顶', '街道']; // 同 plan.js 的 ROUTE
 
 const fresh = () => ({
   slot: 1, mode: '全自动', longName: false, mag: MAG, reserve: 120, hp: 100,
-  wave: 1, left: 8, score: 0, kills: 0, yaw: 0, spread: 4, cross: true, reload: -1,
+  wave: 1, left: 3, goal: null, score: 0, kills: 0, yaw: 0, spread: 4, cross: true, reload: -1,
   game: 'waves', shots: 0, hits: 0, rKills: 0, heads: 0, dash: 1, smoke: 1,
   next: -1, marks: [],
 });
@@ -79,7 +80,7 @@ function reload() {
   st.reload = 0;
 }
 
-// 和游戏里的算分一致：（基础分 + 爆头 70）× 波次，练习场不乘
+// 和游戏里的算分一致：（基础分 + 爆头 70）× 目标序号，练习场不乘
 function points(kind, headshot) {
   return ((kind === 'soldier' ? 150 : 100) + (headshot ? 70 : 0)) * (st.game === 'range' ? 1 : Math.max(1, st.wave));
 }
@@ -101,10 +102,11 @@ function kill() {
   confirmKill(Math.random() < 0.6 ? 'soldier' : 'drone', Math.random() < 0.3);
 }
 
-// 清场：右上的波次块倒数 6 秒，到点自动下一波
+// 清场：过 BREAK_S 秒自动给下一个目标
 function clearWave() {
   st.left = 0;
   st.marks = [];
+  st.goal = null;
   st.next = BREAK_S;
   hud.notice('区域已肃清', 2400, 'wave');
 }
@@ -120,7 +122,7 @@ function lastTwo() {
 const stats = () => {
   const range = st.game === 'range';
   return {
-    mode: st.game, wave: st.wave, kills: range ? st.rKills : st.kills, score: st.score,
+    mode: st.game, wave: st.wave, zones: st.wave - 1, kills: range ? st.rKills : st.kills, score: st.score,
     shots: st.shots, hits: Math.min(st.hits, st.shots), headshots: st.heads, time: 187,
     death: { kind: 'soldier', dist: 23.4 },
   };
@@ -138,12 +140,14 @@ function useAbility(name) {
   st[name] = 0;
 }
 
+// 下一个目标：区域在右前方 40 度，罗盘上出菱形
 function nextWave() {
   st.wave++;
-  st.left = 6 + st.wave * 2;
+  st.left = Math.min(6, 3 + ((st.wave - 1) >> 1));
   st.next = -1;
   st.marks = [];
-  hud.notice(`第 ${st.wave} 波`, 2200, 'wave');
+  st.goal = st.yaw + 40;
+  hud.notice(`前往${ZONES[(st.wave - 1) % ZONES.length]}`, 2600, 'wave');
 }
 
 function hurt(amount = 12, angle = Math.random() * Math.PI * 2) {
@@ -182,7 +186,7 @@ const groups = {
     阵亡: () => showMenu('dead', { stats: stats() }),
     关闭: () => showMenu('hidden'),
   },
-  玩法: { 波次: () => setMode('waves'), 练习场: () => setMode('range') },
+  玩法: { 实战: () => setMode('waves'), 练习场: () => setMode('range') },
   武器: {
     步枪: () => (st.slot = 1),
     爪刀: () => (st.slot = 3),
@@ -207,8 +211,9 @@ const groups = {
     长横幅: () => hud.notice('三号泊位发现重型无人机编队，正在从北侧龙门吊方向接近', 5000),
     大分数: () => (st.score = 1234567890),
   },
-  波次: {
-    下一波: nextWave,
+  目标: {
+    下一个: nextWave,
+    进入区域: () => (st.goal = null),
     剩两个: lastTwo,
     清场: clearWave,
   },
@@ -282,8 +287,9 @@ function update(dt) {
   hud.setWeapon(st.slot, st.longName ? LONG_NAME : rifle ? RIFLE : KNIFE, rifle ? st.mode : '');
   hud.setAmmo(st.mag, rifle ? (st.game === 'range' ? Infinity : st.reserve) : null);
   hud.setHealth(st.hp);
-  hud.setWave(st.game === 'range' ? 0 : st.wave, st.left, st.next >= 0 ? st.next : undefined);
+  hud.setObjective(st.game === 'range' ? '' : ZONES[(st.wave - 1) % ZONES.length], st.left);
   hud.setCompassMarks(st.game === 'range' ? [] : st.marks);
+  hud.setCompassGoal(st.game === 'range' ? null : st.goal);
   hud.setScore(st.score);
   hud.setCompass(st.yaw);
   hud.setCrosshair({ spread: st.spread, visible: st.cross });
