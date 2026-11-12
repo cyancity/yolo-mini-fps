@@ -13,7 +13,9 @@ const QUALITY = {
   low: { scale: 0.62, maxPixelRatio: 1, ao: false, fog: true, reflection: false, shadows: 1, rain: false, water: false },
   medium: { scale: 0.8, maxPixelRatio: 1, ao: true, fog: true, reflection: true, shadows: 1, rain: true, water: true },
   high: { scale: 1, maxPixelRatio: 1, ao: true, fog: true, reflection: true, shadows: 2, rain: true, water: true },
-  ultra: { scale: 1, maxPixelRatio: 2, ao: true, fog: true, reflection: true, shadows: 3, rain: true, water: true },
+  // 超高和高一样按 CSS 像素出图，不跟系统缩放放大：4K 屏开 150% 缩放时跟着放大就是 3840×2160，
+  // 像素是高档的 2.25 倍，一帧从 17 毫秒涨到 34 毫秒，瞄准发黏。超高比高多的是每帧重画的阴影盏数
+  ultra: { scale: 1, maxPixelRatio: 1, ao: true, fog: true, reflection: true, shadows: 3, rain: true, water: true },
 };
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };

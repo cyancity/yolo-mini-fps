@@ -7,3 +7,4 @@ Thumbs.db
 .env.*
 .claude/settings.local.json
 .worktree/
+.claude/worktrees/
