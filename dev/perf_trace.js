@@ -70,7 +70,7 @@ function install(glSlow = 0) {
   add(p, 'render', 'render.rest');
   add(L.ground, 'update', 'mirror');
   add(r.shadowMap, 'render', 'shadow');
-  add(r, 'render', (scene, camera) => (camera !== d.camera ? 'mirror' : scene === d.scene ? 'main' : scene === d.fxScene ? 'fxScene' : 'post'));
+  add(r, 'render', (scene, camera) => (scene === d.scene ? (camera === d.camera ? 'main' : 'mirror') : scene === d.fxScene ? 'fxScene' : 'post'));
   add(p, 'pass', 'post');
   add(d.scene, 'updateMatrixWorld', 'matrixWorld');
   add(d.fxScene, 'updateMatrixWorld', 'matrixWorld');
@@ -330,7 +330,7 @@ function rates({ seconds = 2, dt = 1 / 144 } = {}) {
   let mirror = 0;
   const sm = r.shadowMap, orig = sm.render, rr = r.render;
   sm.render = function (...a) { list.forEach((l, i) => { if (l.shadow.needsUpdate) cnt[i]++; }); return orig.apply(this, a); };
-  r.render = function (scene, camera) { if (camera !== d.camera) mirror++; return rr.call(this, scene, camera); };
+  r.render = function (scene, camera) { if (scene === d.scene && camera !== d.camera) mirror++; return rr.call(this, scene, camera); };
   // 这两个 render 是实例上的属性，不能 delete，要赋回去
   try { d.frame(frames, dt); } finally { sm.render = orig; r.render = rr; }
   return {

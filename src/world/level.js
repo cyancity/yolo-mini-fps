@@ -201,6 +201,8 @@ export async function buildLevel({ scene, mats, sky, lite = false }) {
     zones,
     exitSign: new THREE.Vector3(21, 2.5, -19.6),
   });
+  // 倒影隔帧重画时，阴影图排到它不画的那一帧
+  lighting.mirror = ground;
   // 箱内吊着的灯管
   const tube = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.09), mats.emissive(0xd8e8ff, 18));
   tube.position.set(11.2, CH - 0.12, -3);
