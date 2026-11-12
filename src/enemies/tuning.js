@@ -68,18 +68,23 @@ export const TUNE = {
   soldierDmg: [6, 8], // 士兵每发
   soldierDmgStep: 0.03, // 每波加成
   soldierDmgCap: 1.25, // 加成封顶倍率
-  droneDmg: [4, 6], // 无人机每发
+  droneDmg: [3, 5], // 无人机每发
 
   // ---- 无人机
-  droneAttackersFrom: 4, // 从这一波起同时可以有 2 架在预警或点射，之前 1 架
+  droneFrom: 4, // 从第几个区域目标起配无人机（只有露天区域配，哪些区域见 drones.js 的 HOME）
+  droneTwoFrom: 9, // 从第几个目标起一次两架，之前一架
+  droneForget: 6, // 守区域的无人机这么多秒看不见玩家就回区域上空巡逻，不追出去
+  droneAlert: 4, // 挨打以后这么多秒内知道开枪的人在哪
+  droneJinkGap: [2.2, 4], // 两次横移闪避之间隔多久（秒）；预警和点射时不闪
+  droneAttackersFrom: 99, // 从这一级起同时可以有 2 架在预警或点射，之前 1 架（现在最多两架，一直只放一架开火）
   droneWarn: 0.7, // 开火前的预警（秒）
   droneErr: 0.04, // 每轮点射的随机瞄准误差（每米距离多少米，整轮共用一个偏移：整轮打中或整轮擦过）
   droneErrMin: 0.42, // 瞄准误差的下限（米）：无人机自己选的悬停距离只有 7~15 米，只按距离算近处几乎发发命中
   droneErrMove: 0.6, // 玩家跑动（按 6.3 m/s 归一）时整轮的瞄准误差再放大这么多
   droneSpreadMove: 1.5, // 玩家跑动时每发的散布再放大这么多：一轮扫过去时跑进弹道的人不会被整轮打中
-  droneCool: 1.9, // 同一架两次点射的间隔再乘几倍（乘 drone_nav 的 cooldown）
+  droneCool: 3, // 同一架两次点射的间隔再乘几倍（乘 drone_nav 的 cooldown）
   droneInterval: 1.8, // 全队相邻两次点射的最小间隔再乘几倍（乘 drone_nav 的 interval）：架数多时总火力由它封顶
-  droneLeave: 40, // 连续这么多秒看不见玩家就撤离（爬高飞出地图后回收，不算击杀）：玩家躲进无人机进不去的地方时波次照样能结束
+  droneLeave: 40, // 连续这么多秒看不见玩家就撤离（爬高飞出地图后回收，不算击杀）：玩家躲进无人机进不去的地方时这个区域照样能清完。守区域的要先见过玩家才开始算
   droneLead: 0.8, // 提前量再打几折（乘 drone_nav 的 lead）：横移的人更难打
   droneLag: 1.6, // 瞄准点跟随的时间常数再乘几倍（乘 drone_nav 的 lag）
 };

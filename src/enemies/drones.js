@@ -12,6 +12,14 @@ const BODY_R = 0.35, WHIZ_R = 1.5; // 玩家身体线段的命中半径；子弹
 const HIT_Y = -0.04, HIT_RV = 0.22; // 命中椭球：中心相对机身的高度、竖直半轴（水平半轴是 radius）
 // 命中椭球比机身放大这么多：无人机横移快，照着机身大小判定太难打中。只放大判定，机身和碰撞不变
 const HIT_SCALE = 1.15;
+// 配无人机的区域（只有露天的）：巡逻的椭圆（圆心 x、z，半轴 rx、rz，高度 alt）；椭圆外扩 m 米是它的地盘，
+// 玩家进了地盘才会被它发现，交火时它也不飞出地盘（drone_ai.js 的 reach）。
+// 楼顶指仓库和办公楼两片屋面，街道是东侧南北向的一长条
+const HOME = {
+  yard: { x: 0, z: 0.5, rx: 14, rz: 10, alt: 8, m: 18 },
+  rooftop: { x: -4, z: -30, rx: 18, rz: 6, alt: 12.5, m: 16 },
+  street: { x: 35.6, z: -13, rx: 3, rz: 22, alt: 8, m: 14 },
+};
 
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _u = new THREE.Vector3(), _v = new THREE.Vector3();
 const _e = new THREE.Euler();
@@ -104,8 +112,18 @@ export class DroneManager {
     return model;
   }
 
-  // 从场外高空飞入；level 从 1 起
-  spawnWave(count, level = 1) {
+  // 每个区域目标开始时由 game.js 调：出不出、出几架都在这里定。室内区域和头几个目标不出；
+  // 出来的守在目标区域上空，看见玩家才打，玩家走远或躲开几秒就回去巡逻。返回出了几架
+  spawnFor(level = 1, zone = 'yard') {
+    const home = HOME[zone];
+    if (!home || level < TUNE.droneFrom) return 0;
+    const n = level >= TUNE.droneTwoFrom ? 2 : 1;
+    this.spawnWave(n, level, home);
+    return n;
+  }
+
+  // 从场外高空飞入；level 从 1 起。不给 home 就是跟着玩家打的旧刷法（dev/ 的量法脚本在用）
+  spawnWave(count, level = 1, home = null) {
     const P = levelParams(level);
     // 同时预警或点射的架数：前几波 1 架，之后 2 架
     this.attackers = level < TUNE.droneAttackersFrom ? 1 : 2;
@@ -118,6 +136,9 @@ export class DroneManager {
       const pos = new THREE.Vector3(Math.sin(ang) * R, rand(17, 24), Math.cos(ang) * R * 0.85);
       const d = createDrone(this.pool.pop() || this.park(buildDrone(this.mats)), P, pos);
       d.delay = delay;
+      d.home = home;
+      // 守区域的：进场时不知道玩家在哪；两架一正一反绕圈，不挤在一起
+      if (home) { d.lostT = 99; d.hand = i % 2 ? 1 : -1; }
       delay += rand(0.35, 0.8);
       d.root.position.copy(pos);
       this.drones.push(d);
@@ -125,8 +146,8 @@ export class DroneManager {
   }
 
   activate(d, player) {
-    const p = d.position, pp = player.position;
-    d.lastKnown.copy(pp);
+    const p = d.position, pp = d.home || player.position; // 守区域的朝区域飞，不朝玩家
+    d.lastKnown.set(pp.x, d.home ? 0 : pp.y, pp.z);
     d.yaw = Math.atan2(p.x - pp.x, p.z - pp.z);
     d.velocity.set(pp.x - p.x, 0, pp.z - p.z).setLength(d.params.speed * 1.6);
     d.root.visible = true;
@@ -290,6 +311,7 @@ export class DroneManager {
     drone.hp -= damage;
     drone.shake = 1;
     drone.hintT = 0;
+    drone.alertT = TUNE.droneAlert;
     drone.provoked = true;
     if (dir) {
       // 挨打后被推一下，并立刻横移

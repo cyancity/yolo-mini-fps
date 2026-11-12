@@ -194,6 +194,7 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 被冲脸不后撤：只在玩家自己冲过来时放宽最近距离，依据是 `s.holdDist`（选点时记下的所守掩体离玩家最后位置的距离，不少于 `keepDist` 才算）。自己走近的人照常退回交战距离。
 - 开火名额：第 1 波 1 个，之后 2 个，第 7 波起 3 个；第 3 波起玩家连续 2 秒站在明处多放一个，加上以后不超过 `shootersCap` 3。突击手没掩体时最多站 3.5 秒就挪。
 - 无人机：全队相邻两次点射的间隔乘 `droneInterval` 1.8。悬停点离目标水平不少于 6 米（`drone_ai.js` 的 `NEAR_MIN`），不堵在集装箱口和门口往里打。全队连续 `droneLeave` 40 秒看不见玩家就撤离：爬高飞出地图后回收，不算击杀、不加分、不留残骸。
+- 无人机守区域（2026-11-12 第三轮）：每个区域目标开始时 `game.js` 调 `drones.spawnFor(level, zone)`，出不出、出几架都在 `drones.js` 里定：只有露天区域（`HOME` 里的堆场、楼顶、街道）配，第 4 个目标起一架，第 9 个起两架（`tuning.js` 的 `droneFrom`、`droneTwoFrom`）。守区域的无人机绕 `HOME` 的椭圆巡逻；玩家进了椭圆外扩 `m` 米的地盘并且看得见才交火，交火时不飞出地盘；`droneForget` 6 秒看不见就回去巡逻，不再凭空知道玩家的位置（挨打后 `droneAlert` 4 秒内知道）；见过玩家以后才按 `droneLeave` 撤离。血量固定 60（步枪两三发），每轮 4 发，预警和点射时不横移，俯冲概率 0.12，同时只有一架开火。`drones.spawnWave(n, level)` 不给 `home` 仍是跟着玩家打的旧刷法，量法脚本在用。
 - `hit` 的选项：`soldiers.hit(target, dmg, point, dir, part, { silent })` 和 `drones.hit(drone, dmg, point, dir, part, { silent })`，`silent` 时不放受击声（刀砍用）。
 - 敌人音效：士兵换弹放 `npcMagOut`、`npcMagIn`（按换弹进度现放，中途死亡或清场后不再响）；敌方子弹落在玩家 10 米内放着弹声，金属面 3 米内三成放跳弹声；无人机残骸落地放 `droneCrash`，落定后 `droneSpark` 循环 6 秒，清场时也会停。
 - 士兵移动（`soldiers_move.js`）：身体台阶 0.48 米，比寻路网格的 0.42 宽一点，用来吸收网格采样误差；卡住按 0.7 秒里往当前路点靠近不到 0.15 米判断，先侧挤，再重新寻路，第 4 次吸附到最近的网格点。

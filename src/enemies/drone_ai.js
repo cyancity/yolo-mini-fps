@@ -25,6 +25,8 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
 const wrap = (a) => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
 const turn = (cur, want, max) => cur + clamp(wrap(want - cur), -max, max);
 const ease = (dt, rate) => 1 - Math.exp(-dt * rate);
+// 守区域的无人机的地盘：巡逻椭圆外扩 m 米。小于 1 在地盘里
+const reach = (h, x, z) => Math.hypot((x - h.x) / (h.rx + h.m), (z - h.z) / (h.rz + h.m));
 
 export function createDrone(model, P, position) {
   model.root.rotation.order = 'YXZ';
@@ -41,6 +43,8 @@ export function createDrone(model, P, position) {
     gy: 0, gp: -0.4, aimPt: new THREE.Vector3(), aimErr: new THREE.Vector3(), aimOff: 9,
     fire: { phase: 'idle', t: rand(0.2, 1), shots: 0, run: 0 }, eyeGlow: 2.5, lampK: 0,
     sound: null, smokeT: 0, spark: null, leaveT: 0,
+    // 守区域的无人机（drones.js 的 spawnFor）：home 是巡逻圈和活动范围，contact 是见没见过玩家，alertT 是挨打后还知道玩家在哪的秒数
+    home: null, contact: false, alertT: 0, patrol: false,
   };
 }
 
@@ -51,26 +55,33 @@ export function think(d, dt, m, player) {
     d.losT = 0.1 + Math.random() * 0.05;
     _a.set(p.x, p.y - 0.14, p.z);
     d.dist = _a.distanceTo(player.eye);
-    d.sees = player.alive !== false && d.dist < SIGHT && !m.phys?.blocked?.(_a, player.eye);
+    // 守区域的只留意进了地盘（多看出去一成半）的人；刚挨了打的那几秒不受这个限制
+    const near = !d.home || d.alertT > 0 || reach(d.home, pp.x, pp.z) < 1.15;
+    d.sees = near && player.alive !== false && d.dist < SIGHT && !m.phys?.blocked?.(_a, player.eye);
   }
+  d.alertT -= dt;
   if (d.sees) {
     d.seenT += dt;
     d.lostT = 0;
+    d.contact = true;
     d.lastKnown.copy(pp);
     m.shared.pos.copy(pp);
     m.shared.t = m.time;
   } else {
     d.seenT = 0;
     d.lostT += dt;
-    // 别的无人机看得见就共享目标位置；全都看不见时隔几秒拿到一次带误差的方位，免得玩家一躲整波就僵住
+    // 别的无人机看得见就共享目标位置
     if (m.time - m.shared.t < 0.6) d.lastKnown.copy(m.shared.pos);
+    // 守区域的不凭空知道玩家在哪：只有刚挨了打（开枪的人暴露了位置）才拿得到方位
+    else if (d.home) { if (d.alertT > 0) d.lastKnown.copy(pp); }
+    // 跟着玩家打的（旧的波次刷法）：全都看不见时隔几秒拿到一次带误差的方位，免得玩家一躲整波就僵住
     else if ((d.hintT -= dt) <= 0) {
       d.hintT = rand(3.5, 6);
       d.lastKnown.set(pp.x + rand(-4, 4), pp.y, pp.z + rand(-4, 4));
     }
   }
-  // 撤离看全队：别的无人机还看得见玩家（还在交火）就不走
-  if (d.state !== 'leave' && Math.min(d.lostT, m.time - m.shared.t) > TUNE.droneLeave) startLeave(d);
+  // 撤离看全队：别的无人机还看得见玩家（还在交火）就不走。守区域的没见过玩家就一直巡逻，不撤
+  if (d.state !== 'leave' && (!d.home || d.contact) && Math.min(d.lostT, m.time - m.shared.t) > TUNE.droneLeave) startLeave(d);
   if (d.state === 'leave') d.leaveT += dt;
   else if (d.state === 'enter') enter(d, pp);
   else if (d.state === 'dive') dive(d, dt, player);
@@ -79,7 +90,11 @@ export function think(d, dt, m, player) {
 
 function enter(d, pp) {
   const p = d.position;
-  if (!d.entry) {
+  if (!d.entry && d.home) {
+    // 守区域的：直接飞到巡逻圈上离来向最近的那一点
+    const h = d.home, a = Math.atan2((p.z - h.z) / h.rz, (p.x - h.x) / h.rx);
+    d.entry = clampBounds(new THREE.Vector3(h.x + Math.cos(a) * h.rx, h.alt, h.z + Math.sin(a) * h.rz));
+  } else if (!d.entry) {
     // 入场点在玩家和来向之间；先保持在箱墙之上的高度，进场后再降
     _a.set(p.x - pp.x, 0, p.z - pp.z).normalize();
     const r = rand(10, 16);
@@ -110,8 +125,26 @@ function startLeave(d) {
   d.goal.set(p.x + (dx / l) * 90, 32, p.z + (dz / l) * 90);
 }
 
+// 守区域的无人机没有目标时：绕着区域上空的椭圆慢飞，探照灯左右扫（aim 里没目标的那一支）
+function patrol(d, dt) {
+  const h = d.home;
+  if (!d.patrol) {
+    d.patrol = true;
+    d.orbit = Math.atan2((d.position.z - h.z) / h.rz, (d.position.x - h.x) / h.rx);
+    d.jink.set(0, 0, 0);
+    d.jinkOn = false;
+    d.speedMul = 0.55;
+  }
+  d.orbit += (d.hand * 3 * dt) / Math.max(h.rx, h.rz);
+  d.goal.set(h.x + Math.cos(d.orbit) * h.rx, 0, h.z + Math.sin(d.orbit) * h.rz);
+  clampBounds(d.goal).y = h.alt;
+}
+
 function engage(d, dt, m, player) {
-  const p = d.position, pp = player.position;
+  const p = d.position, pp = player.position, home = d.home;
+  // 守区域的：droneForget 秒看不见玩家就回去巡逻，不满图追
+  if (home && !d.sees && d.alertT <= 0 && d.lostT > TUNE.droneForget) { patrol(d, dt); return; }
+  if (d.patrol) { d.patrol = false; d.speedMul = 1; d.replanT = 0; }
   const focus = d.sees ? pp : d.lastKnown;
   if ((d.replanT -= dt) <= 0) plan(d, m, focus, false);
   else if (!d.sees && d.lostT > 1.2 && (d.seekT -= dt) <= 0) {
@@ -121,14 +154,22 @@ function engage(d, dt, m, player) {
   d.orbit += d.orbitRate * dt;
   d.goal.set(focus.x + Math.cos(d.orbit) * d.range, 0, focus.z + Math.sin(d.orbit) * d.range);
   clampBounds(d.goal).y = Math.max(d.alt, focus.y + 2.4);
-  if ((d.jinkT -= dt) <= 0) {
+  if (home) {
+    // 玩家走远了不跟出去：悬停点收在地盘里
+    const k = reach(home, d.goal.x, d.goal.z);
+    if (k > 1) { d.goal.x = home.x + (d.goal.x - home.x) / k; d.goal.z = home.z + (d.goal.z - home.z) / k; }
+  }
+  // 预警和点射的时候稳住不横移：亮灯那一下是留给玩家还手的
+  if (d.fire.phase !== 'idle') {
+    if (d.jinkOn) { d.jinkOn = false; d.jink.set(0, 0, 0); d.jinkT = rand(TUNE.droneJinkGap[0], TUNE.droneJinkGap[1]); }
+  } else if ((d.jinkT -= dt) <= 0) {
     if (d.jinkOn || !d.sees) {
       d.jinkOn = false;
       d.jink.set(0, 0, 0);
-      d.jinkT = rand(1.1, 2.6) / (0.85 + 0.15 * d.params.level);
+      d.jinkT = rand(TUNE.droneJinkGap[0], TUNE.droneJinkGap[1]);
     } else {
       // 垂直于视线横移一段，让玩家不好跟枪
-      const s = (Math.random() < 0.5 ? -1 : 1) * rand(2.5, 4.5);
+      const s = (Math.random() < 0.5 ? -1 : 1) * rand(2, 3.5);
       _a.set(pp.x - p.x, 0, pp.z - p.z).normalize();
       d.jink.set(-_a.z * s, 0, _a.x * s);
       d.jinkOn = true;
