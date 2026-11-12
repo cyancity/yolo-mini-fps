@@ -102,7 +102,7 @@ export function levelParams(level = 1) {
   const c = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   return {
     level,
-    hp: 60, // 不随等级涨：步枪两三发打下来
+    hp: 50, // 不随等级涨：步枪打无人机每发 26，两发打下来
     speed: c(6.5 + 0.3 * l, 6.5, 8), // 机动速度 m/s
     accel: c(9 + 1.2 * l, 9, 15), // 水平加速度 m/s²
     burst: 4, // 每次点射发数
