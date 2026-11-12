@@ -1,20 +1,16 @@
 import * as THREE from 'three';
 
-// 人形敌人的身体：优先用 soldier_rig.js（另一位同事在做的骨骼模型），
-// 模块缺失或者抛错时退回这里的胶囊小人。两者接口一致，管理器不用分辨。
+// 人形敌人的身体：优先用 soldier_rig.js 的骨骼模型，它加载不了、抛错或接口不全时退回这里的胶囊小人。
+// 两者接口一致，管理器不用分辨。
 export const SOLDIER_DEFAULT = { radius: 0.32, height: 1.82, eye: 1.62, crouchHeight: 1.25, crouchEye: 1.1 };
-const RIG_MODULE = './soldier_rig.js';
 
-// 返回 { SOLDIER, createShared(mats), Rig, real }。先探一下文件在不在：开发服务器对不存在的路径回首页 HTML，
-// 直接 import 会在控制台留一条模块加载错误
+// 返回 { SOLDIER, createShared(mats), Rig, real }。模块地址必须是字面量：打包时靠它把骨骼模型连同依赖收进产物，
+// 运行时拼出来的地址在打包结果里不存在，线上会一直是胶囊小人
 export async function loadBody() {
-  const url = new URL(RIG_MODULE, import.meta.url).href;
   // 地址栏带 ?standin 强制用胶囊小人：排查是 AI 还是模型的问题
   if (typeof location !== 'undefined' && /[?&]standin\b/.test(location.search)) return standIn();
   try {
-    const head = await fetch(url, { method: 'HEAD' });
-    if (!head.ok || !/javascript/.test(head.headers.get('content-type') || '')) throw new Error('soldier_rig.js 还没有');
-    const mod = await import(/* @vite-ignore */ url);
+    const mod = await import('./soldier_rig.js');
     if (typeof mod.SoldierRig !== 'function' || typeof mod.createSoldierShared !== 'function') throw new Error('soldier_rig.js 接口不全');
     return { SOLDIER: { ...SOLDIER_DEFAULT, ...mod.SOLDIER }, createShared: mod.createSoldierShared, Rig: mod.SoldierRig, variants: mod.SOLDIER_VARIANTS || 0, real: true };
   } catch (e) {

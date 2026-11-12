@@ -13,6 +13,7 @@
 - 技术栈：three.js（WebGLRenderer + 自写后处理管线）+ Vite，原生 ES 模块，不用 TypeScript 和 UI 框架（HUD 只是画布上的几个 DOM 节点）。
 - 运行：`npm run dev`，Claude 桌面端用 `.claude/launch.json` 的 `game`（端口 5183）。验收和多人同时改代码时用不带热更新的 `game-nohmr`（端口 5184），改完手动刷新。
 - 目录：`src/engine` 渲染管线与物理，`src/gfx` 程序化贴图与材质，`src/world` 关卡（`plan.js` 是总平面，`build.js` 是墙和楼梯这类构件，`zones/` 是堆场以外的各分区），`src/weapons` 武器与手臂模型，`src/enemies` 无人机和武装人员，`src/fx` 粒子与贴花，`src/audio` 音效，`src/ui` HUD，`src/game` 玩法；`dev/` 是模型和特效的单独预览页。
+- 线上：推到 `main` 后 `.github/workflows/pages.yml` 打包并发布到 GitHub Pages（`https://cyancity.github.io/yolo-mini-fps/`）。站点在子路径下：运行时加载的文件地址从 `import.meta.env.BASE_URL` 拼，不写 `/` 开头的根路径；动态 `import()` 的地址写字面量，拼出来的地址打包不进产物。本地按子路径核对的做法见 `dev/README.md` 的「线上版本」。
 - 调试接口、分区模块的接口和验收用的命令写在 `dev/README.md`。
 - 第一人称武器把深度压在最前面一小段（`VM_DEPTH`），后处理靠它识别武器像素；新加后处理时用 `src/engine/glsl.js` 的 `decodeDepth`。
 - 固定灯光数量：灯都在启动时建好，闲置时把 intensity 设 0，不要增删或切 `visible`（会触发全部着色器重编译）。各分区的灯数上限在 `plan.js` 的 `LIGHT_BUDGET`。
