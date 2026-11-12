@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-// 每波的出生点：按步行距离挑。从玩家所在的网格节点做一次限距 Dijkstra，量出到各出生点要走多远
+// spawnWave（敌人上门的波次，游戏流程已经改用 soldiers_guard.js 的驻守，dev 的量法脚本还在用）的出生点：按步行距离挑。从玩家所在的网格节点做一次限距 Dijkstra，量出到各出生点要走多远
 // （直线近的楼顶、二层要绕楼梯走一百多米，按直线挑会让人半分钟都到不了）。
 // 第 1、2 波至少一个点在步行 FIRST 米以内，其余点落在 NEAR..FAR_WALK；玩家看得见的点、贴脸的点都不用。
 const FIRST = 50, NEAR = 20, FAR_WALK = 90, MAX_COST = 110;

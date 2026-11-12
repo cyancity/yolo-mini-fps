@@ -5,6 +5,7 @@ import { combat } from './soldiers_tactics.js';
 import { CONTACT } from './contact.js';
 import { TUNE } from './tuning.js';
 import { levelK } from './soldiers_gun.js';
+import { guardWalk, guardReturn } from './soldiers_guard.js';
 
 // 人形敌人的头脑：感知（视野锥、视线、反应时间、听觉、发现尸体、互通情报）和非战斗状态（站岗巡逻、调查、搜索）。
 // think 每人每秒约 10 次（错开），act 每帧跑：计时、瞄准、转身、要不要开火。
@@ -96,6 +97,8 @@ function noticeBodies(s, m) {
   if (!m.bodies) return;
   for (const o of m.active) {
     if (o.alive || (s.noticed & o.bit) || m.time - o.deathT > 45) continue;
+    // 驻守的人只管自己这一队的尸体：上一个区域留下的不去看，免得刚换目标就有人出区域
+    if (s.zone && o.zone !== s.zone) continue;
     const dx = o.pos.x - s.pos.x, dz = o.pos.z - s.pos.z, d = Math.hypot(dx, dz);
     if (d > 26 || Math.abs(o.pos.y - s.pos.y) > 3) continue;
     const look = s.yaw + s.aimYaw;
@@ -132,6 +135,8 @@ function patrol(s, m) {
   if (s.lookT < s.lookDur) return;
   s.lookT = 0;
   s.lookDur = rand(3, 7);
+  // 驻守的人只在岗位附近、自己的区域里走动
+  if (s.zone) { guardWalk(s, m); return; }
   if (Math.random() < 0.6 && m.nav.ready) {
     const n = m.nav.randomNear(s.home.x, s.home.y, s.home.z, 7);
     if (n >= 0) setGoal(s, m.nav.cx(n), m.nav.nY[n], m.nav.cz(n), SPEED.walk);
@@ -148,7 +153,7 @@ function checkOut(s, m) {
 
 function search(s, m, player) {
   s.searchT += THINK;
-  if (s.searchT > (s.hunter ? 12 : 22)) {
+  if (s.searchT > (s.hunter ? 12 : s.zone ? TUNE.guardSearch : 22)) {
     if (s.hunter && player.alive) {
       // 整波人不能因为玩家躲起来就僵住：隔一阵拿到一个带误差的方位，朝那儿压过去
       s.lastKnown.set(player.position.x + rand(-6, 6), player.position.y, player.position.z + rand(-6, 6));
@@ -157,8 +162,9 @@ function search(s, m, player) {
       return;
     }
     s.state = 'patrol';
-    s.home.copy(s.pos);
     s.lookT = 0;
+    // 驻守的人找不到就回岗位，不满图搜
+    if (s.zone) guardReturn(s); else s.home.copy(s.pos);
     return;
   }
   if (busy(s, m)) return;
@@ -179,7 +185,8 @@ function setWaypointFar(s, m, n) {
 // 听到动静：没在交火的去看看，交火中的人借枪声更新玩家位置
 export function hear(s, m, pos, radius) {
   const d = s.pos.distanceTo(pos);
-  if (d > radius) return;
+  // 站岗的人只对附近的枪声有反应：玩家在别的区域开枪，他们不上门
+  if (d > (s.zone && s.state === 'patrol' ? Math.min(radius, TUNE.guardHear) : radius)) return;
   const err = d * 0.12;
   if (s.state === 'combat') {
     if (m.time - s.knownT > 0.8) {

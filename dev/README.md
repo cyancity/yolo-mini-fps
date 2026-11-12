@@ -58,7 +58,7 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 
 ## 玩法模块的接口（2026-11-12 新增）
 
-- 玩法：`game.mode` 是 `waves` 或 `range`（练习场，没有敌人、只有靶子、弹药不限）。菜单发 `hud.emit('start', mode)`，调试用 `__dbg.play('range')`。
+- 玩法：`game.mode` 是 `waves`（实战，一个区域一个区域地肃清，见「区域目标和驻守」）或 `range`（练习场，没有敌人、只有靶子、弹药不限）。菜单发 `hud.emit('start', mode)`，调试用 `__dbg.play('range')`。
 - 设置：`src/game/settings.js` 的 `SETTING_DEFS` 和 `Settings`（`get / set / onChange`，存 localStorage）。界面用 `hud.bindSettings(settings)` 拿到它，调试用 `__dbg.settings`。
 - HUD 新增（游戏都用可选链调用）：`hud.kill({ kind, headshot, points, dist })`、`hud.setAbility('dash' | 'smoke', ready01)`、`hud.setRange({ shots, hits, kills, headshots })`、`hud.setMode(mode)`。
 - 喷气：V 或 `Mouse4`。`player.dashing / dash / dashF / dashS / dashX / dashZ / dashCool`，回调 `player.onDash`。0.32 秒、约 6.4 米，结束后 0.25 秒内下落只吃三成重力。画面效果在 `post_final.js`（`uDash`、`uDashDir`）。
@@ -72,8 +72,8 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 切枪（`src/weapons/weapons.js`）：各武器实现 `unequip()`（返回从当前姿态收到底要多久）、`cancelUnequip(min)`（从收到一半的位置举回来，`min` 是至少要沉到的程度，0 到 1）、`equip({ instant })`（不播举枪动作）。`env.state.tuck` 是喷气时枪收在身前的程度。喷气途中切枪瞬间完成，并解除喷气后的收枪硬直。
 - 摇枪：1、3、1 连按得再快（同一帧里按完也算），枪也至少沉下去全程的 11% 再回来（`weapons.js` 的 `WIGGLE_MIN`，`anim.js` 的 `dipKick` 给下沉补一个初速度）；这一小段下沉不挡开火。同一帧里的切枪键按 `input.seq`（本帧按下的键，按先后排）依次处理，`input.hit` 是集合，不分先后。左手的烟雾弹还没出手时按切枪键会先排队（`weapons.queued`），出手后再切。
 - 命中标记：准星上只有四道斜线围成的空心 X，命中白色、击倒黄色，出现时从外面向中心收 `--hit-in`。尺寸在 `tokens.css` 的 `--hit-len`、`--hit-gap`、`--hit-w`。击倒时准星上没有别的框，分数在准星下方的加分条（`hud_kill.js`）。
-- HUD 的备弹在练习场固定显示 ∞（`hud.js` 的 `setAmmo` 按 mode 决定，调用方传什么数都一样）；`hud.kill` 的 `bonus` 是爆头加分（含波次倍率），不传时 HUD 按 `points` 反推。
-- `tokens.css` 由页面用 `<link>` 在 `hud.css` 前面引入（`index.html`、`dev/hud.html`），`hud.css` 里不再 `@import`。罗盘、波次、得分和练习场统计共用一层暗底 `--hud-scrim`，朝天看时压在亮云上也读得清。
+- HUD 的备弹在练习场固定显示 ∞（`hud.js` 的 `setAmmo` 按 mode 决定，调用方传什么数都一样）；`hud.kill` 的 `bonus` 是爆头加分（含目标序号的倍率），不传时 HUD 按 `points` 反推。
+- `tokens.css` 由页面用 `<link>` 在 `hud.css` 前面引入（`index.html`、`dev/hud.html`），`hud.css` 里不再 `@import`。罗盘、目标区域、得分和练习场统计共用一层暗底 `--hud-scrim`，朝天看时压在亮云上也读得清。
 - 靶场：`src/enemies/targets.js` 的 `TargetRange`（`kind = 'target'`，`setActive / reset / update / raycast / hit / stats / onKill`）。
 - 烟雾弹：G。`src/game/smoke.js` 的 `SmokeGrenades`（`ready`、`throw(camera, player)`、`update`、`clear`）。烟团登记在 `phys.smokes`（`{ x, y, z, r }`），`phys.blocked()` 的视线会被它挡住，子弹和人不受影响。
 - 时段：`src/world/timeofday.js` 的 `TimeOfDay`（`names`、`set(name)`、`exposure`、`rain`、`ambient`），`level.setTime(name)`，调试用 `__dbg.tod`。
@@ -135,10 +135,10 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 减弱动效：`player.motion` 为 0.3，乘在冲刺、滑铲、喷气的视野拉伸和喷气滚转上；`game.reducedMotion` 为真时 `uDash` 恒为 0，低血红晕不脉动；HUD 的 CSS 挂在 `.hud[data-motion="reduced"]`。
 - 开局淡入：`game.newRun` 把 `uFade` 置 0，`FADE_IN`（0.35 秒）内升到 1；阵亡后 1.6 秒内压暗。刚 `play()` 就冻结会截到黑屏，先推进 60 帧。
 - 受击方向：`player.onDamage(angle, amount, from)` 交给 `hud.damage(angle, fromX, fromZ)`，`hud.updateArcs(px, pz, yaw)` 每帧让弧跟着来源转；`hud.resetRun` 清掉上一局的弧。
-- 战绩：`game.stats()` 返回 `{ mode, wave, kills, score, shots, hits, headshots, time, death }`（`src/game/run_stats.js`），命中只算步枪；暂停菜单、阵亡结算和练习场右上角同一口径（`targets.stats` 是靶子自己的计数，刀砍也算）。
-- 波次和罗盘：`hud.setWave(wave, remaining, nextIn)`，给了 `nextIn` 就显示下一波倒计时；`hud.setCompassMarks(degs)` 画最后几个敌人的方位，视野外的钉在 17% 和 83%。`hud.kill` 带 `time`（游戏时间），连杀窗口按它算。右上的击杀信息栏（`hud.feed`）已删。
-- 暂停菜单：左边本局战绩，右边设置；波次模式打过第 1 波以后，「重新开始」和切玩法要点第二次确认。
-- 字阶、透明度都在 `tokens.css`（caption 0.875、label 1、body 1.125 个单位）。`dev/hud.html` 有「波次」一组按钮。
+- 战绩：`game.stats()` 返回 `{ mode, wave, zones, kills, score, shots, hits, headshots, time, death }`（`src/game/run_stats.js`；`wave` 是目标序号，`zones` 是肃清的区域数，结算页显示后者），命中只算步枪；暂停菜单、阵亡结算和练习场右上角同一口径（`targets.stats` 是靶子自己的计数，刀砍也算）。
+- 目标和罗盘：`hud.setObjective(name, remaining)` 写目标区域的中文名和剩余敌人数，`name` 为空时收起；`hud.setCompassGoal(deg)` 在罗盘上用品牌色菱形标目标区域的方位，传 `null` 收起（玩家已经在区域里）；`hud.setCompassMarks(degs)` 用橙色三角画最后几个敌人的方位。三种标记在视野外都钉在 17% 和 83%。`hud.kill` 带 `time`（游戏时间），连杀窗口按它算。右上的击杀信息栏（`hud.feed`）已删。
+- 暂停菜单：左边本局战绩，右边设置；实战里第一个目标出现以后，「重新开始」和切玩法要点第二次确认。
+- 字阶、透明度都在 `tokens.css`（caption 0.875、label 1、body 1.125 个单位）。`dev/hud.html` 有「目标」一组按钮。
 - 看细节：预览面板窄，1440 的视口会被缩小，给画布或 `document.body` 设 `transform: scale(N)` 加 `transform-origin` 放大。后台标签页里 CSS 动画不按游戏时间走，要看某一刻就把那个元素的 `animation-play-state` 设成 `paused`，或者读 `getComputedStyle`。
 
 ## 掩体（2026-11-12 打磨）
@@ -149,7 +149,7 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 省三角形的简版：`palletStack / crate / tarpCargo / addContainer` 都有 `lean: true`，默认不开。
 - 量法 `dev/cover_measure.js`（游戏页里 `await import('/dev/cover_measure.js?v=' + Date.now())`，先 `__dbg.play('waves')`）：`__cover.run({ save: 'base' })`、`__cover.run({ cmp: 'base' })` 给出到最近掩体的距离、暴露度、各区最长视线和最差 15 处；`__cover.heat(ppm, only)` 叠俯视热力图；`__cover.paths()` 是各敌人出生点到玩家出生点的步行米数。当前数（矮掩体判定线 1.05 米）：地面到最近掩体 90 分位 2.9 米、最大 5.8 米，暴露最高一成的平均暴露度 0.35，出生点 1.9 米内有高掩体。
 - 摆掩体后的核对清单：练习场靶子视线 `auditLayout` 为 0；新碰撞体之间的缝要么小于 0.3 米、要么不小于 1.3 米；敌人出生点 1.5 米内不放东西；`__cover.paths()` 的步行距离变化不超过 15%；`dev/jump_test.js` 的 `__scanRun` 对每件矮件 16 个方向试跳，落脚不高于 1.1 米、不出围栏；堆场中央 (0, 2) 朝北、朝西的三角形增加不超过 3%。
-- 已知：玩家出生点一带仍是全图暴露度最高的地方（练习场 14 个靶子的视线扇面里不能放高东西）。出生点的选法（`soldiers_spawn.js`）不用玩家 12 米内和看得见的点，开局不会贴脸刷人。
+- 已知：玩家出生点一带仍是全图暴露度最高的地方（练习场 14 个靶子的视线扇面里不能放高东西）。出生点的选法（驻守用 `soldiers_guard.js`，`spawnWave` 用 `soldiers_spawn.js`）都不用玩家 12 米内和看得见的点，开局不会贴脸刷人。
 
 ## 音效接线（2026-11-12 打磨）
 
@@ -187,6 +187,17 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 量法 `dev/rain_measure.js`：`__rm.setup('night')` 进练习场并切时段，`__rm.shot(x, z, yaw, pitch, y)` 返回整帧均值、画面下部 40% 的均值和最亮的几列，`__rm.col(px)` 是某一列从中线往下的亮度，`__rm.sky()` 是天空平均色；`__ab(true)` 在同一页面退回不下雨的样子，`__ab(false)` 换回来。
 - 没看过的：前台连续运行加镜头移动时，倒影竖条在 TAA 下会不会闪；中画质没有单独截图。
 
+## 区域目标和驻守（2026-11-12）
+
+- 流程在 `game.js` 的 `objectives()`：一局沿 `plan.js` 的 `ROUTE`（堆场、仓库、办公楼、楼顶、街道，卸货场并在街道里）一圈圈推进。开局 1.5 秒出第一个目标，清完（`drones.aliveCount + soldiers.aliveCount === 0`）补弹药，4 秒后出下一个。
+- 游戏对象上的字段：`game.wave` 是目标序号，也是敌人的 level（下面各节说的「第 N 波」现在就是第 N 个目标）；`game.zone` 是当前目标的区域名；`game.cleared` 是肃清的区域数；`game.routeI` 是路线上走到第几格；`game.waveActive` 是当前目标还没清完；`game.nextWaveAt` 是下一个目标出现的时刻，设成 `Infinity` 就不再自动出目标（量法脚本都这么做）。
+- 每个目标开始时：`soldiers.spawnGarrison(zone, count, level, player)` 刷驻守的人，返回刷了几个（0 表示这个区域没有出生点，流程跳到路线上的下一个）；`drones.spawnFor?.(level, zone)` 出无人机。人数是 `min(6, 3 + floor((序号 - 1) / 2))`，再按区域的出生点数量封顶。
+- 驻守（`src/enemies/soldiers_guard.js`）：只用 `level.spawns` 里 `zone` 相同的点，玩家看得见（头和胸口两条视线，不管朝向）或者离玩家不到 `guardNear` 12 米的不用；一个都不满足时取最远的那个；合格的点不够就共用，后来的在旁边错开一格。记录上的 `s.zone` 是所守的区域（`spawnWave` 进场的人是空串），`s.station` 是岗位。上一次刷在哪记在 `soldiers.spawnLog`（`{ x, y, z, zone, dist, ok }`）。
+- 站岗时每 3 到 7 秒在岗位周围 `guardRoam` 4 米内挪一处（要还在自己的区域里、从脚下直着走得到），或者原地换个方向看。只对 `guardHear` 20 米内的枪声有反应，只去看自己这一队的尸体。看见玩家、挨打、听见枪声以后走原来的交战逻辑，可以追出区域；丢了玩家转入搜索，`guardSearch` 15 秒还没找到就走回岗位（从丢失视线算起约 26 到 35 秒）。
+- 区域的判定：`objectiveAt(x, y, z)`（脚底坐标）返回五个区域名之一，脚底高过 7.5 米又在屋面板范围里算 `rooftop`，其余按 `zoneAt`。`objectiveToward(zone, x, z)` 是罗盘上往哪个点标：区域范围里离玩家最近的一点，楼顶标最近的上楼口（办公楼楼梯间、卸货场的消防梯）。`ZONE_NAME` 是中文名。
+- 伤害：武装人员血量固定 `TUNE.soldierHp` 100，不随 level 涨。步枪打武装人员一发 36（`rifle.js` 的 `DAMAGE_SOLDIER`），部位倍率头 4、躯干 1、四肢 0.7：躯干 3 发、四肢 4 发、爆头 1 发。靶子和无人机仍按 `DAMAGE` 26 结算（靶子躯干 4 发）。爪刀轻击 55、重击 140 没动。
+- 回归 `dev/review_waves.js`：`__rw.start(6)`，反复 `__rw.run(60)` 直到 `done`，`__rw.report()`。每个目标记区域、人数、刷出时离玩家最近多少米 `spawnMin`、玩家看得见的个数 `spawnSeen`、不在目标区域的个数 `spawnOut`、玩家在原地等的 20 秒里出了区域的人数 `leftZone`、清完到下一个目标的间隔 `gap`。
+
 ## 敌人和难度（2026-11-12 第二轮）
 
 - 数字都在 `src/enemies/tuning.js` 的 `TUNE`，`game.soldiers.tune` 和 `game.drones.tune` 指向它，控制台里改了立刻生效。
@@ -198,17 +209,17 @@ startHarness(async ({ THREE, scene, mats, gear, view }) => {
 - 敌人音效：士兵换弹放 `npcMagOut`、`npcMagIn`（按换弹进度现放，中途死亡或清场后不再响）；敌方子弹落在玩家 10 米内放着弹声，金属面 3 米内三成放跳弹声；无人机残骸落地放 `droneCrash`，落定后 `droneSpark` 循环 6 秒，清场时也会停。
 - 士兵移动（`soldiers_move.js`）：身体台阶 0.48 米，比寻路网格的 0.42 宽一点，用来吸收网格采样误差；卡住按 0.7 秒里往当前路点靠近不到 0.15 米判断，先侧挤，再重新寻路，第 4 次吸附到最近的网格点。
 - 手感目标：站桩挨到 100 点伤害 7 到 9 秒；横向跑动 15 秒挨的伤害中位不超过 40；在高掩体后探头，躲着时 30 秒挨的伤害中位不超过 20，头 0.6 秒不中弹的比例不低于 0.9；躲好以后到第一次被看见中位不少于 12 秒；第 6 波站桩不少于 4.5 秒，第 7 波以后不少于 4 秒；无人机每秒伤害第 3 波 2 架站着不超过 4、跑动不超过 2，第 6 波 3 架站着不超过 7、跑动不超过 3.5。量法是 `tune_measure.js` 和 `tune_cover.js`，结果噪声大，判断要 30 局以上。
-- 量法的坑：`t2` 和 `t5n` 的跑动档会留下 `__tuneState.mv.fn`，之后在同一页面跑 `review_waves.js` 前先设成 `null`，不然玩家会被拖走。
+- 量法的坑：`t2` 和 `t5n` 的跑动档会留下 `__tuneState.mv.fn`，之后在同一页面跑 `review_waves.js` 前先设成 `null`，不然玩家会被拖走。量开枪发数时不要把 `Math.random` 整个换成常数（`soldiers_roles.js` 的 `waveRoles` 和 `audio.js` 选音效变体的地方靠随机数跳出循环，会卡死），把 `rifle.spreadRad` 临时换成返回 0 的函数。
 - 已知的场地漏点：街上送货车正南约 19 米处能直接看见车后的躲藏位；堆场中部那只集装箱朝西开口，无人机能从西边隔着箱口打进去。
 
 ## 量法脚本一览
 
 都在游戏页里用 `await import('/dev/<名字>?v=' + Date.now())` 加载，先 `__dbg.play('waves')`：
 
-- `tune_measure.js`：敌人强度。`__tune.t1` 到 `t5`、`t5n(n, level, run, count)`、`check()`、`waves.start() / run(60) / report()`。
+- `tune_measure.js`：敌人强度。`__tune.t1` 到 `t5`、`t5n(n, level, run, count)`、`check()`、`waves.start() / run(60) / report()`。`waves` 量的是敌人上门的波次（`spawnWave`），游戏流程已经不这么刷，由脚本自己按原来的数刷。
 - `tune_cover.js`：掩体可靠度。`__tune.cover(n, site, level, count)`，`site` 是 `yard`、`west`、`van`；每局返回 `see`（躲好到第一次被看见的秒数）、`los`、`who`，`void` 的局不算。
 - `cover_measure.js`：掩体覆盖，见「掩体」一节。
-- `review_waves.js`：`__rw.start(x, y, z) / run(40) / report()`，站在一点上挨一整波，看谁在打、从哪打。
+- `review_waves.js`：`__rw.start(n) / run(60) / report()`，连清 n 个区域目标，核对刷人的位置和驻守，见「区域目标和驻守」。
 - `jump_test.js`：`__jt(x, y, z, yaw, { sprint, jumpAt, frames, dashAt })` 试一次跳，`__scanRun` 对矮件 16 个方向试跳。
 - `rain_measure.js`：雨夜的亮度统计和同页面 A/B，见「雨夜」一节。
 - `perf_probe.js`：性能，见「性能测量」一节。

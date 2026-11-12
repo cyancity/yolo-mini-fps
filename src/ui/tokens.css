@@ -45,7 +45,7 @@
   --hud-drop: drop-shadow(0 0 1px rgb(0 0 0 / 0.9));
   --hud-track: rgb(0 0 0 / 0.5);           /* 生命条空槽 */
   --hud-gap: rgb(0 0 0 / 0.85);            /* 生命条分段缝、罗盘刻度的暗边 */
-  --hud-scrim: linear-gradient(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.16)); /* 罗盘、波次、得分和练习场统计的暗底：明亮的天空前字也读得清，夜里不显眼 */
+  --hud-scrim: linear-gradient(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.16)); /* 罗盘、目标区域、得分和练习场统计的暗底：明亮的天空前字也读得清，夜里不显眼 */
   --mask-fade-x: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); /* 罗盘两端淡出 */
   /* 受击方向弧：只留正上方约 70 度，两端渐隐 */
   --mask-arc: conic-gradient(from -35deg, transparent, #000 14deg, #000 56deg, transparent 70deg, transparent);
@@ -58,7 +58,7 @@
   /* 字阶 */
   /* 1440×900 下中文标签不小于 14px、罗盘数字不小于 12px：label 是一个单位，caption 只给数字和拉丁字母 */
   --text-caption: calc(var(--hud-unit) * 0.875);    /* 罗盘数字、拉丁副名、帧率 */
-  --text-label: var(--hud-unit);                    /* 模式、波次、栏位、键帽、操作说明 */
+  --text-label: var(--hud-unit);                    /* 模式、目标区域、栏位、键帽、操作说明 */
   --text-body: calc(var(--hud-unit) * 1.125);       /* 武器名、按钮 */
   --text-title: calc(var(--hud-unit) * 1.25);       /* 横幅、得分、菜单状态 */
   --text-headline: calc(var(--hud-unit) * 1.875);   /* 生命值、备弹、战绩 */
@@ -130,7 +130,7 @@
   --duration-hit: 220ms;                   /* 命中标记停留 */
   --duration-kill: 420ms;                  /* 击毁标记停留 */
   --duration-dmg: 1100ms;                  /* 受击方向弧停留 */
-  --duration-banner: 520ms;                /* 「第 N 波」横幅的入场 */
+  --duration-banner: 520ms;                /* 「前往仓库」这类大横幅的入场 */
   --duration-trail: 500ms;                 /* 生命条掉血残影缩回去的时长 */
   --delay-trail: 400ms;                    /* 掉血后残影先停这么久再跟上 */
   --duration-pulse: 900ms;                 /* 低血闪烁周期 */
@@ -161,6 +161,7 @@
   /* 罗盘上剩余敌人的方位：用敌人身上的橙色识别色 */
   --hostile: #ff6a1f;                      /* soldier_mesh.js 的 MARK 0xff5a14 经过色调映射后在屏幕上的样子 */
   --size-mark: calc(var(--hud-unit) * 0.5);
+  --size-goal: calc(var(--hud-unit) * 0.625);       /* 罗盘上目标区域的菱形（边长） */
   --duration-ready: 420ms;                 /* 冷却好时的闪一下 */
 }
 

@@ -52,7 +52,7 @@
   display: block;
 }
 
-/* ---------- 上方：罗盘、波次 ---------- */
+/* ---------- 上方：罗盘、目标区域 ---------- */
 
 .hud-top {
   grid-area: 1 / 2;
@@ -136,6 +136,16 @@
   opacity: var(--opacity-mark-edge);
 }
 
+/* 目标区域的方位：品牌色的菱形，和敌人的橙色三角靠形状分开；对上正中的小三角就是朝着目标走 */
+.hud-compass-goal i {
+  bottom: var(--space-0-5);
+  width: var(--size-goal);
+  height: var(--size-goal);
+  border: 0;
+  background: var(--brand);
+  transform: translateX(-50%) rotate(45deg);
+}
+
 /* 朝下的小三角，用边框画，这样投影不会被裁掉 */
 .hud-compass-caret {
   place-self: start center;
@@ -145,7 +155,8 @@
   filter: var(--hud-drop);
 }
 
-.hud-wave {
+/* 当前目标：区域名和剩余敌人数 */
+.hud-objective {
   display: none;
   align-items: baseline;
   gap: var(--space-3);
@@ -154,28 +165,23 @@
   color: var(--muted-foreground);
 }
 
-.hud-wave[data-on] {
+.hud-objective[data-on] {
   display: flex;
 }
 
-.hud-wave b {
+.hud-objective b {
   font-size: var(--text-body);
   font-weight: var(--font-weight-semibold);
   color: var(--foreground);
 }
 
-.hud-wave-left {
+.hud-objective-left {
   padding-left: var(--space-3);
   border-left: 1px solid var(--border-strong);
 }
 
-/* 清场后的倒计时：「下一波 N」用品牌色 */
-.hud-wave[data-next] .hud-wave-left b {
-  color: var(--brand-text);
-}
-
-/* 波次、得分和练习场统计和罗盘一样垫一层暗底：朝天看时灰色的小字压在亮云上也读得清 */
-.hud-wave,
+/* 目标区域、得分和练习场统计和罗盘一样垫一层暗底：朝天看时灰色的小字压在亮云上也读得清 */
+.hud-objective,
 .hud-score,
 .hud-range {
   padding: var(--space-1) var(--space-2);
@@ -216,7 +222,7 @@
   opacity: 0;
 }
 
-/* 「第 N 波」「区域已肃清」：大一档，上下两道品牌色细线，入场时从宽字距收拢 */
+/* 「前往仓库」「区域已肃清」：大一档，上下两道品牌色细线，入场时从宽字距收拢 */
 .hud > .hud-notice[data-variant="wave"] {
   border-image: linear-gradient(90deg, transparent, var(--brand) 25%, var(--brand) 75%, transparent) 1;
   font-size: var(--text-headline);
@@ -1170,7 +1176,7 @@
   to { transform: none; }
 }
 
-/* ---------- 右上：练习场的命中统计（换掉得分和波次） ---------- */
+/* ---------- 右上：练习场的命中统计（换掉得分和目标区域） ---------- */
 
 .hud-range {
   display: none;
@@ -1187,7 +1193,7 @@
 }
 
 .hud[data-mode="range"] .hud-score,
-.hud[data-mode="range"] .hud-wave[data-on] {
+.hud[data-mode="range"] .hud-objective[data-on] {
   display: none;
 }
 

@@ -1,6 +1,6 @@
 // DOCK ZERO 敌人杀伤力量法（T1~T6），数字定在 src/enemies/tuning.js。开发服务器上的游戏页里加载：
 //   await import('/dev/tune_measure.js?v=' + Date.now())
-// 前提：__dbg.ready，且已经 __dbg.play('waves')。脚本把 game.nextWaveAt 设成 Infinity，不让波次自己刷人。
+// 前提：__dbg.ready，且已经 __dbg.play('waves')。脚本把 game.nextWaveAt 设成 Infinity，不让游戏自己给区域目标、刷人。
 // 在 dev/drone.html?sim 里加载时只有 __tune.t5s（空旷场地的无人机自然交火）。
 // 用法（每个返回 5 次以上的明细和中位数）：
 //   __tune.t1(5)  站桩：OPEN 空地，3 个第 3 波士兵在 15~20 米，方向每次从看得见玩家的方向里随机挑（间隔至少 45°）。t100 = 第一个人看见玩家起累计 100 点伤害的秒数；
@@ -360,15 +360,15 @@
     }
     return { updateMs: r2(acc / n * 1000) / 1000, alive: S.aliveCount, drones: R.aliveCount };
   }
-  // 回归：正常的波次流程（game.waves 自己刷人），玩家站在出生点不动、不死。士兵交火 12 秒后打死、无人机出场 25 秒后打掉，
+  // 回归：敌人上门的波次（游戏的流程已经改成区域目标、敌人驻守，这里由脚本自己按原来的数刷：士兵 spawnWave(min(2 + 波次, 8))、
+  // 无人机 spawnWave(min(ceil(波次 / 2), 4))，清完 6 秒下一波），玩家站在出生点不动、不死。士兵交火 12 秒后打死、无人机出场 25 秒后打掉，
   // 推进到第 maxWave 波打完。每波记：最多同时开火的士兵、名额上限、名额拿了 3 秒一轮都没打的次数、
   // 没名额的人在交火中原地不动（不算蹲在掩体后）最长几秒和超过 5 秒的次数、无人机开了几枪、最多同时预警或点射的架数。
   // 用法：__tune.waves.start()，然后反复 __tune.waves.run(60) 直到返回的 wave 超过 4，__tune.waves.report()
-  const WV = { waves: {}, rec: new Map(), maxWave: 4 };
+  const WV = { waves: {}, rec: new Map(), maxWave: 4, wave: 0, active: false, nextAt: 0, at: 0 };
   WV.start = () => {
     reset(D.level.spawn?.x ?? -9, D.level.spawn?.z ?? 16);
-    G.wave = 0;
-    G.nextWaveAt = G.time + 0.5;
+    Object.assign(WV, { wave: 0, active: false, nextAt: G.time + 0.5 });
     WV.waves = {};
     WV.rec.clear();
     if (!R.__tuneShoot) {
@@ -378,8 +378,18 @@
     }
   };
   WV.tick = (dt) => {
-    if (!G.waveActive) return;
-    const w = (WV.waves[G.wave] ||= { dur: 0, soldierShots: 0, droneShots: 0, maxShooters: 0, limit: 0, tokens: 0, idleTokens: 0, stillMax: 0, stillOver5: 0, droneFiringMax: 0, shots0: fire.n });
+    if (!WV.active && G.time >= WV.nextAt) {
+      WV.wave++;
+      WV.active = true;
+      WV.at = G.time;
+      S.spawnWave(Math.min(2 + WV.wave, 8), WV.wave, P);
+      R.spawnWave?.(Math.min(Math.ceil(WV.wave / 2), 4), WV.wave);
+    } else if (WV.active && S.aliveCount + R.aliveCount === 0 && G.time - WV.at > 1) {
+      WV.active = false;
+      WV.nextAt = G.time + 6;
+    }
+    if (!WV.active) return;
+    const w = (WV.waves[WV.wave] ||= { dur: 0, soldierShots: 0, droneShots: 0, maxShooters: 0, limit: 0, tokens: 0, idleTokens: 0, stillMax: 0, stillOver5: 0, droneFiringMax: 0, shots0: fire.n });
     WV.cur = w;
     w.dur += dt;
     w.soldierShots = fire.n - w.shots0;
@@ -414,8 +424,8 @@
     w.droneFiringMax = Math.max(w.droneFiringMax, df);
   };
   WV.run = (sec) => {
-    for (let i = 0; i < sec * 120 && G.wave <= WV.maxWave; i++) { D.step(1 / 120); WV.tick(1 / 120); }
-    return { wave: G.wave, active: G.waveActive, t: r2(G.time) };
+    for (let i = 0; i < sec * 120 && WV.wave <= WV.maxWave; i++) { D.step(1 / 120); WV.tick(1 / 120); }
+    return { wave: WV.wave, active: WV.active, t: r2(G.time) };
   };
   WV.report = () => {
     const out = {};

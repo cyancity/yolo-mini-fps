@@ -6,6 +6,7 @@ import { DroneManager } from '../enemies/drones.js';
 import { SoldierManager } from '../enemies/soldiers.js';
 import { RunStats } from './run_stats.js';
 import { wireAudio, updateAudio } from './game_audio.js';
+import { ROUTE, ZONE_NAME, objectiveAt, objectiveToward } from '../world/plan.js';
 
 const QUALITY = {
   // 低档不下雨、不画海面和地面倒影：开发时后台标签页默认用它
@@ -20,10 +21,13 @@ const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 *
 const FADE_IN = 0.35, DEATH_DIM = 0.35;
 const _fwd = new THREE.Vector3(), _up = new THREE.Vector3();
 const _marks = [];
+// 区域目标的驻守人数：从 3 起每两个目标加 1，6 封顶（区域自己的出生点不够时 soldiers_guard.js 再封一次）
+const guards = (n) => Math.min(6, 3 + ((n - 1) >> 1));
+const FIRST_IN = 1.5, NEXT_IN = 4; // 开局到第一个目标、清完一个区域到下一个目标出现（秒）
 // 罗盘方位角：0 北（-Z），90 东（+X），和 HUD 罗盘的读数一致
 const bearing = (p, from) => (Math.atan2(p.x - from.x, from.z - p.z) * 180) / Math.PI;
 
-// 一局游戏：状态机（菜单/进行中/暂停/阵亡）、波次、计分，以及各子系统之间的接线
+// 一局游戏：状态机（菜单/进行中/暂停/阵亡）、区域目标、计分，以及各子系统之间的接线
 export class Game {
   constructor({ pipeline, scene, fxScene, camera, mats, sky, level, input, hud, audio, resize, settings }) {
     Object.assign(this, { pipeline, scene, fxScene, camera, mats, sky, level, input, hud, audio, resize, settings });
@@ -31,7 +35,12 @@ export class Game {
     this.want = null;
     this.time = 0;
     this.menuTime = 0;
+    // 区域目标：wave 是目标序号（也是敌人的 level），zone 是当前目标的区域名，cleared 是已肃清的区域数。
+    // nextWaveAt 设成 Infinity 就不再自动给目标（dev 的量法脚本用），字段名沿用波次时的
     this.wave = 0;
+    this.zone = '';
+    this.routeI = 0;
+    this.cleared = 0;
     this.kills = 0;
     this.score = 0;
     this.nextWaveAt = Infinity;
@@ -43,7 +52,7 @@ export class Game {
     this.indoorT = 0;
     this.indoorKind = 'room'; // 'room' 小房间，'hall' 仓库大厅
     this.quality = 'high';
-    // 玩法：waves 波次，range 练习场（没有敌人，只有靶子，弹药不限）
+    // 玩法：waves 实战（一个区域一个区域地肃清），range 练习场（没有敌人，只有靶子，弹药不限）
     this.mode = 'waves';
     this.wantMode = null;
     this.targets = null;
@@ -133,7 +142,7 @@ export class Game {
     this.pipeline.final.uExposure.value = (this.level.tod?.exposure ?? 1) * this.brightness;
   }
 
-  // 击杀反馈：音效、准心上的击杀标记、加分飘字。波次和练习场共用
+  // 击杀反馈：音效、准心上的击杀标记、加分飘字。实战和练习场共用
   killFeedback(kind, info = {}) {
     const headshot = !!info.headshot;
     const mult = this.mode === 'range' ? 1 : Math.max(1, this.wave);
@@ -225,10 +234,13 @@ export class Game {
     this.smokeWant = 0;
     this.fx.clear();
     this.wave = 0;
+    this.zone = '';
+    this.routeI = 0;
+    this.cleared = 0;
     this.kills = 0;
     this.score = 0;
     this.waveActive = false;
-    this.nextWaveAt = range ? Infinity : this.time + 3;
+    this.nextWaveAt = range ? Infinity : this.time + FIRST_IN;
     this.damageFx = 0;
     this.pipeline.final.uDesat.value = 0; // 阵亡时的去色，不清的话淡入完还要灰半秒
     // 从黑淡入：这一帧就压黑，TAA 的历史帧（菜单镜头或上一局）作废，相机视野在 respawn 里直接设到位
@@ -239,10 +251,11 @@ export class Game {
     this.weapons.reset();
     this.weapons.setVisible(true);
     this.hud.setScore(0);
-    this.hud.setWave(0, 0);
+    this.hud.setObjective('', 0);
     this.hud.resetRun?.();
     this.hud.setMode?.(this.mode);
-    this.hud.notice(range ? '练习场：只有靶子，弹药不限' : '肃清码头的武装人员和无人机', 2800);
+    // 实战的第一句提示是第一个目标（objectives 里出）
+    if (range) this.hud.notice('练习场：只有靶子，弹药不限', 2800);
   }
 
   pause() {
@@ -255,7 +268,7 @@ export class Game {
 
   // 本局战绩：暂停和阵亡菜单用，字段见 hud.js 的 fillStats
   stats() {
-    return { mode: this.mode, wave: this.wave, kills: this.kills, score: this.score, ...this.run.snapshot(this.time) };
+    return { mode: this.mode, wave: this.wave, zones: this.cleared, kills: this.kills, score: this.score, ...this.run.snapshot(this.time) };
   }
 
   // 只在本次运行切画质（省内存档、调试）：设置面板跟着显示，存档里还是玩家选的档
@@ -279,35 +292,51 @@ export class Game {
     this.resize();
   }
 
-  // 每波：地面上的武装人员为主，无人机在堆场上空配合
-  waves(dt) {
-    const { drones, soldiers, hud, audio, player } = this;
-    const alive = drones.aliveCount + soldiers.aliveCount;
+  // 区域目标：沿 ROUTE 一圈圈推进。敌人驻守在目标区域里等玩家过去（soldiers_guard.js），无人机出几架由 drones.spawnFor 定；
+  // 清完补弹药，NEXT_IN 秒后给下一个。目标序号就是敌人的 level
+  objectives() {
+    const { drones, soldiers, hud, audio, player } = this, p = player.position;
     if (!this.waveActive && this.time >= this.nextWaveAt) {
       this.wave++;
       this.waveActive = true;
       this.waveAt = this.time;
-      soldiers.spawnWave(Math.min(2 + this.wave, 8), this.wave, player);
-      drones.spawnWave(Math.min(Math.ceil(this.wave / 2), 4), this.wave);
+      // 某个分区没建起来（没有出生点）就跳到路线上的下一个
+      for (let i = 0; i < ROUTE.length; i++) {
+        this.zone = ROUTE[this.routeI++ % ROUTE.length];
+        if (soldiers.spawnGarrison(this.zone, guards(this.wave), this.wave, player)) break;
+      }
+      drones.spawnFor?.(this.wave, this.zone);
       audio.play('waveStart', { volume: 0.8 });
-      hud.notice(`第 ${this.wave} 波`, 2200, 'wave');
-    } else if (this.waveActive && alive === 0 && this.time - this.waveAt > 1) {
+      const here = objectiveAt(p.x, p.y, p.z) === this.zone;
+      hud.notice(`${here ? '肃清' : '前往'}${ZONE_NAME[this.zone]}`, 2600, 'wave');
+    }
+    const alive = drones.aliveCount + soldiers.aliveCount;
+    if (this.waveActive && alive === 0 && this.time - this.waveAt > 1) {
       this.waveActive = false;
-      this.nextWaveAt = this.time + 6;
+      this.nextWaveAt = this.time + NEXT_IN;
+      this.cleared++;
       this.score += 250 * this.wave;
       hud.setScore(this.score);
       audio.play('waveClear', { volume: 0.8 });
       hud.notice('区域已肃清', 2400, 'wave');
       this.weapons.resupply();
     }
-    hud.setWave(this.wave, alive, this.waveActive ? undefined : this.nextWaveAt - this.time);
-    // 剩下不多于 2 个时在罗盘上标出方位（还没落地的士兵不标）
+    hud.setObjective(ZONE_NAME[this.zone] || '', alive);
+    // 罗盘：玩家不在目标区域里时标区域的方位；剩下不多于 2 个敌人时标出他们（还没落地的士兵不标）
     _marks.length = 0;
-    if (this.waveActive && alive > 0 && alive <= 2) {
-      for (const s of soldiers.active) if (s.alive) _marks.push(bearing(s.pos, player.position));
-      for (const d of drones.drones) if (d.alive) _marks.push(bearing(d.position, player.position));
+    let goal = null;
+    if (this.waveActive) {
+      if (alive > 0 && alive <= 2) {
+        for (const s of soldiers.active) if (s.alive) _marks.push(bearing(s.pos, p));
+        for (const d of drones.drones) if (d.alive) _marks.push(bearing(d.position, p));
+      }
+      if (objectiveAt(p.x, p.y, p.z) !== this.zone) {
+        const to = objectiveToward(this.zone, p.x, p.z);
+        if ((to.x - p.x) ** 2 + (to.z - p.z) ** 2 > 1) goal = bearing(to, p);
+      }
     }
     hud.setCompassMarks?.(_marks);
+    hud.setCompassGoal?.(goal);
   }
 
   // 菜单背景：贴着地面的慢速环绕镜头
@@ -344,7 +373,7 @@ export class Game {
         else if (weapons.throwOffhand(() => smoke.throw(camera, player))) this.smokeWant = 0;
       }
       this.smoke?.update(sim);
-      if (playing && this.mode === 'waves') this.waves(sim);
+      if (playing && this.mode === 'waves') this.objectives();
       // 和暂停菜单同一份数据（stats()）：命中只算步枪，刀砍中靶子不算
       else if (playing) hud.setRange?.({ shots: this.run.shots, hits: Math.min(this.run.hits, this.run.shots), kills: this.kills, headshots: this.run.headshots });
     }

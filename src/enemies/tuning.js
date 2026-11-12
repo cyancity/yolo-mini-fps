@@ -1,8 +1,18 @@
 // 敌人杀伤力和公平感的数字集中在这里。士兵和无人机都读这一个对象，game.soldiers.tune 和 game.drones.tune 指向它，
 // 控制台里改了立刻生效（新开的点射、新算的反应时间起用）。以后做难度选项就是整体换一组数。
 // 手感目标见 soldiers_gun.js 顶上的注释，量法和复跑入口是 dev/tune_measure.js（用法写在它开头）。
-// 下面的“波”就是敌人的 level（game.js 用波次号当 level）。
+// 下面的“波”就是敌人的 level（game.js 用区域目标的序号当 level，第 1 个目标是第 1 波）。
 export const TUNE = {
+  // ---- 血量：不随 level 涨。步枪打武装人员一发 36（rifle.js 的 DAMAGE_SOLDIER），部位倍率头 4、躯干 1、四肢 0.7
+  // （soldiers.js 的 hit）：躯干 3 发、四肢 4 发、爆头 1 发；爪刀轻击 55、重击 140
+  soldierHp: 100,
+
+  // ---- 驻守（soldiers_guard.js）：区域目标的敌人守在自己的区域里，不上门找人
+  guardNear: 12, // 离玩家不到这么远（米）的出生点不用；玩家看得见的也不用
+  guardRoam: 4, // 站岗时在岗位周围这么多米内走动
+  guardHear: 20, // 站岗的人只对这么近的枪声有反应（已经警觉的照常按 45 米听）
+  guardSearch: 15, // 丢了玩家、搜索这么多秒还没找到就回岗位
+
   // ---- 开火名额（同时允许点射的士兵数）
   shooters1: 1, // 第 1 波
   shootersMid: 2, // 第 2 波到 shootersLateFrom 之前

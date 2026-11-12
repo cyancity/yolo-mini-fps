@@ -56,6 +56,7 @@ export class Hud {
     this.abilities = new Abilities(this.el.abilities);
     this.range = new RangeStats(this.el);
     this.marks = new CompassMarks(this.el.marks, COMPASS_VIEW);
+    this.goal = new CompassMarks(this.el.goal, COMPASS_VIEW);
     this.statRows = [...this.el.stats.children].map((row) => ({ el: row, dt: row.firstElementChild, dd: row.lastElementChild }));
     this.runWave = 0;
     this.armed = null;
@@ -141,24 +142,17 @@ export class Hud {
     }
   }
 
-  // nextIn：清场后到下一波的秒数，给了就把「剩余」换成「下一波」倒计时
-  setWave(wave, remaining, nextIn) {
+  // 当前目标：区域的中文名和剩余敌人数；name 为空（还没有目标）时收起
+  setObjective(name, remaining) {
     const v = this.v;
-    if (wave !== v.wave) {
-      v.wave = wave;
-      this.el.waveNo.textContent = wave;
-      this.el.wave.toggleAttribute('data-on', wave > 0);
+    if (name !== v.zone) {
+      v.zone = name;
+      this.el.zone.textContent = name;
+      this.el.objective.toggleAttribute('data-on', !!name);
     }
-    const next = Number.isFinite(nextIn) ? Math.max(0, Math.ceil(nextIn)) : -1;
-    if ((next >= 0) !== v.waveNext) {
-      v.waveNext = next >= 0;
-      this.el.waveLeftName.textContent = v.waveNext ? '下一波' : '剩余';
-      this.el.wave.toggleAttribute('data-next', v.waveNext);
-    }
-    const count = next >= 0 ? next : remaining;
-    if (count !== v.remaining) {
-      v.remaining = count;
-      this.el.waveLeft.textContent = count;
+    if (remaining !== v.remaining) {
+      v.remaining = remaining;
+      this.el.left.textContent = remaining;
     }
   }
 
@@ -168,7 +162,7 @@ export class Hud {
     this.el.score.textContent = this.number.format(score);
   }
 
-  // 玩法：练习场把右上角的得分换成命中统计，并隐藏波次
+  // 玩法：练习场把右上角的得分换成命中统计，并隐藏目标区域
   setMode(mode) {
     const next = mode === 'range' ? 'range' : 'waves';
     if (next === this.layer.dataset.mode) return;
@@ -191,6 +185,11 @@ export class Hud {
     this.marks.set(degs);
   }
 
+  // 目标区域的方位角（度）；null 收起（玩家已经在区域里，或者还没有目标）
+  setCompassGoal(deg) {
+    this.goal.set(deg == null ? [] : [deg]);
+  }
+
   setCompass(yawDeg) {
     const yaw = Math.round((((yawDeg % 360) + 360) % 360) * 10) / 10; // 0.1° 一档
     if (yaw === this.v.yaw || Number.isNaN(yaw)) return;
@@ -199,6 +198,7 @@ export class Hud {
     const shift = (yaw - COMPASS_FROM - COMPASS_VIEW / 2) / COMPASS_SPAN;
     this.el.track.style.transform = `translateX(${(-shift * 100).toFixed(3)}%)`;
     this.marks.setYaw(yaw);
+    this.goal.setYaw(yaw);
   }
 
   setCrosshair({ spread, visible } = {}) {
@@ -264,6 +264,7 @@ export class Hud {
   resetRun() {
     this.killFx.reset();
     this.marks.set([]);
+    this.goal.set([]);
     // 上一局刚挨打的弧：去掉动画属性就回到 opacity 0，下次 damage 重新从 'a' 起
     for (const arc of this.arcs) { arc.has = false; delete arc.el.dataset.anim; }
     this.arcNext = 0;
@@ -303,7 +304,7 @@ export class Hud {
     arc.el.style.setProperty('--a', `${a.toFixed(3)}rad`);
   }
 
-  // variant 为 'wave' 时用大一档的横幅样式，带入场动画（「第 N 波」「区域已肃清」）
+  // variant 为 'wave' 时用大一档的横幅样式，带入场动画（「前往仓库」「区域已肃清」）
   notice(text, ms = 2200, variant = '') {
     const el = this.el.notice;
     el.textContent = text;
@@ -362,8 +363,8 @@ export class Hud {
     if (menu?.parts.includes('stats')) this.fillStats(stats);
   }
 
-  // 本局战绩（game.stats()）：{ mode, wave, kills, score, shots, hits, headshots, time, death }。
-  // 波次模式六项，练习场是命中率、击倒、爆头率；阵亡页的标题下写死因
+  // 本局战绩（game.stats()）：{ mode, wave, zones, kills, score, shots, hits, headshots, time, death }，
+  // wave 是目标序号，zones 是肃清的区域数。实战六项，练习场是命中率、击倒、爆头率；阵亡页的标题下写死因
   fillStats(stats) {
     const range = stats?.mode === 'range';
     this.runWave = range ? 0 : stats?.wave ?? 0;
@@ -372,7 +373,7 @@ export class Hud {
     const kills = stats.kills ?? 0, heads = stats.headshots ?? 0, acc = pct(stats.hits, stats.shots);
     const values = range
       ? [acc, kills, pct(heads, kills)]
-      : [stats.wave ?? 0, kills, this.number.format(stats.score ?? 0), acc, heads, clock(stats.time)];
+      : [stats.zones ?? 0, kills, this.number.format(stats.score ?? 0), acc, heads, clock(stats.time)];
     const names = STATS[range ? 'range' : 'waves'];
     this.statRows.forEach((row, i) => {
       row.el.hidden = i >= names.length;
@@ -439,7 +440,7 @@ export class Hud {
     // 键盘触发的 click 的 detail 是 0
     if (e.detail === 0 && performance.now() - this.menuAt < KEY_GUARD_MS) return;
     if (which === 'button') return this.emit(menu.event, menu.arg);
-    // 波次模式打到第 1 波以后，暂停里这两个按钮会丢掉本局：先换成确认的说法，3 秒内再点才执行
+    // 实战里第一个目标出现以后，暂停里这两个按钮会丢掉本局：先换成确认的说法，3 秒内再点才执行
     if (menu === MENUS.paused && this.mode === 'waves' && this.runWave >= 1 && this.armed !== which) return this.arm(which);
     this.disarm();
     if (which === 'again') this.emit('restart');

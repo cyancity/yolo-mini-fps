@@ -137,3 +137,33 @@ export function zoneAt(x, z) {
   if (x > ZONE.street.x0) return 'street';
   return 'yard';
 }
+
+// ---- 区域目标（game.js 的 objectives）：一局沿这条连通路线一圈圈推进。名字和 level.spawns 的 zone 字段是同一套；
+// 卸货场并在街道里，楼顶是两块屋面
+export const ROUTE = ['yard', 'warehouse', 'office', 'rooftop', 'street'];
+export const ZONE_NAME = { yard: '堆场', warehouse: '仓库', office: '办公楼', rooftop: '楼顶', street: '街道' };
+// 脚底高过它、又在屋面板的范围里，就算在楼顶（办公楼二层楼面 4.6，屋面 8.1；出屋面楼梯的最后几级也算）
+const ROOF_FROM = Y.officeRoof - 0.6;
+const over = (r, x, z) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+
+// 这个位置（脚底）在哪个目标区域里
+export function objectiveAt(x, y, z) {
+  if (y > ROOF_FROM && (over(ROOF.warehouse, x, z) || over(ROOF.office, x, z))) return 'rooftop';
+  const zone = zoneAt(x, z);
+  return zone === 'court' ? 'street' : zone;
+}
+
+// 罗盘上目标区域的方位朝哪个点标：区域范围里离玩家最近的一点。楼顶在头顶上，平面上没有方向，
+// 标最近的一处上楼口（办公楼楼梯间、卸货场的消防梯）。返回的对象是复用的
+const AREA = { yard: [ZONE.yard], warehouse: [ZONE.warehouse], office: [ZONE.office], street: [ZONE.street, ZONE.court], rooftop: [RESERVED.stairwell, RESERVED.fireEscape] };
+const _to = { x: 0, z: 0 };
+export function objectiveToward(zone, x, z) {
+  let best = Infinity;
+  for (const r of AREA[zone] || AREA.yard) {
+    const up = zone === 'rooftop';
+    const px = up ? (r.x0 + r.x1) / 2 : Math.min(r.x1, Math.max(r.x0, x)), pz = up ? (r.z0 + r.z1) / 2 : Math.min(r.z1, Math.max(r.z0, z));
+    const d = (px - x) ** 2 + (pz - z) ** 2;
+    if (d < best) { best = d; _to.x = px; _to.z = pz; }
+  }
+  return _to;
+}
